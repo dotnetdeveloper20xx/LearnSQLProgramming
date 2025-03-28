@@ -1956,9 +1956,177 @@ GROUP BY CustomerId;
 **Why**: Used in RFM segmentation.
 **How**: `MAX` finds latest date per group.
 
-
 ## ✅ Stage 2: Window Functions – Ranking & Time-Series Analysis
 
+### 1. Rank customers by total spending
+```sql
+SELECT 
+    CustomerId,
+    SUM(oi.Quantity * oi.PriceAtPurchase) AS TotalSpent,
+    RANK() OVER (ORDER BY SUM(oi.Quantity * oi.PriceAtPurchase) DESC) AS SpendingRank
+FROM Orders o
+JOIN OrderItems oi ON o.OrderId = oi.OrderId
+GROUP BY CustomerId;
+```
+**What**: Ranks customers based on spending.
+**Why**: For loyalty or reward tiers.
+**How**: `RANK()` function partitions results and orders by spend.
+
+---
+
+### 2. Get the latest order per customer
+```sql
+SELECT *
+FROM (
+    SELECT *, ROW_NUMBER() OVER (PARTITION BY CustomerId ORDER BY OrderDate DESC) AS rn
+    FROM Orders
+) AS ranked
+WHERE rn = 1;
+```
+**What**: Identifies the most recent order.
+**Why**: Track customer activity.
+**How**: `ROW_NUMBER()` resets per customer.
+
+---
+
+### 3. Compare each customer's order value to previous
+```sql
+SELECT 
+    CustomerId,
+    OrderId,
+    OrderDate,
+    SUM(oi.Quantity * oi.PriceAtPurchase) AS OrderValue,
+    LAG(SUM(oi.Quantity * oi.PriceAtPurchase)) OVER (PARTITION BY CustomerId ORDER BY o.OrderDate) AS PrevOrderValue
+FROM Orders o
+JOIN OrderItems oi ON o.OrderId = oi.OrderId
+GROUP BY CustomerId, OrderId, OrderDate;
+```
+**What**: Compares sequential purchases.
+**Why**: Detect increasing/decreasing spend patterns.
+**How**: `LAG()` brings prior row value into current row.
+
+---
+
+### 4. Cumulative revenue per customer
+```sql
+SELECT 
+    CustomerId,
+    OrderDate,
+    SUM(oi.Quantity * oi.PriceAtPurchase) AS Revenue,
+    SUM(SUM(oi.Quantity * oi.PriceAtPurchase)) OVER (PARTITION BY CustomerId ORDER BY OrderDate) AS RunningTotal
+FROM Orders o
+JOIN OrderItems oi ON o.OrderId = oi.OrderId
+GROUP BY CustomerId, OrderDate;
+```
+**What**: Shows how much customer has spent over time.
+**Why**: Visualize financial engagement.
+**How**: Nested SUM with OVER clause.
+
+---
+
+### 5. Find the first order of every customer
+```sql
+SELECT *
+FROM (
+    SELECT *, RANK() OVER (PARTITION BY CustomerId ORDER BY OrderDate ASC) AS rnk
+    FROM Orders
+) AS RankedOrders
+WHERE rnk = 1;
+```
+**What**: Extracts first purchase.
+**Why**: Entry point for onboarding campaigns.
+**How**: `RANK()` ordered by ascending order date.
+
+---
+
+### 6. Find customers whose last order was their highest-value order
+```sql
+WITH OrderStats AS (
+    SELECT 
+        CustomerId,
+        OrderId,
+        OrderDate,
+        SUM(oi.Quantity * oi.PriceAtPurchase) AS OrderValue,
+        ROW_NUMBER() OVER (PARTITION BY CustomerId ORDER BY OrderDate DESC) AS rn
+    FROM Orders o
+    JOIN OrderItems oi ON o.OrderId = oi.OrderId
+    GROUP BY CustomerId, OrderId, OrderDate
+)
+SELECT *
+FROM OrderStats
+WHERE rn = 1 AND OrderValue = (
+    SELECT MAX(SUM(oi2.Quantity * oi2.PriceAtPurchase))
+    FROM Orders o2
+    JOIN OrderItems oi2 ON o2.OrderId = oi2.OrderId
+    WHERE o2.CustomerId = OrderStats.CustomerId
+    GROUP BY o2.OrderId
+);
+```
+**What**: Checks if last order is max order.
+**Why**: Signals growth or loyalty.
+**How**: Combines `ROW_NUMBER()` with correlated subquery.
+
+---
+
+### 7. Bucket customers into quartiles based on total spending
+```sql
+SELECT CustomerId, TotalSpent,
+       NTILE(4) OVER (ORDER BY TotalSpent DESC) AS SpendingQuartile
+FROM (
+    SELECT CustomerId, SUM(oi.Quantity * oi.PriceAtPurchase) AS TotalSpent
+    FROM Orders o
+    JOIN OrderItems oi ON o.OrderId = oi.OrderId
+    GROUP BY CustomerId
+) AS Spending;
+```
+**What**: Segments customers into 4 buckets.
+**Why**: Targeting by segment.
+**How**: `NTILE(4)` divides rows into 4 evenly.
+
+---
+
+### 8. Add order count per customer next to each order
+```sql
+SELECT 
+    OrderId,
+    CustomerId,
+    COUNT(*) OVER (PARTITION BY CustomerId) AS TotalOrdersForCustomer
+FROM Orders;
+```
+**What**: Adds context to each order.
+**Why**: Profile density of purchases.
+**How**: `COUNT(*) OVER` scans partition.
+
+---
+
+### 9. Find most recent and second-most-recent orders
+```sql
+SELECT *
+FROM (
+    SELECT *, DENSE_RANK() OVER (PARTITION BY CustomerId ORDER BY OrderDate DESC) AS rnk
+    FROM Orders
+) AS Ranked
+WHERE rnk <= 2;
+```
+**What**: History snapshot.
+**Why**: Useful for retention analysis.
+**How**: `DENSE_RANK()` allows ties.
+
+---
+
+### 10. Add difference between current and previous order date
+```sql
+SELECT 
+    CustomerId,
+    OrderDate,
+    DATEDIFF(DAY, LAG(OrderDate) OVER (PARTITION BY CustomerId ORDER BY OrderDate), OrderDate) AS DaysSinceLast
+FROM Orders;
+```
+**What**: Time gaps between customer orders.
+**Why**: Churn prediction.
+**How**: Use `LAG()` and `DATEDIFF()`.
+
+---
 
 ### 11. Compare order values with average customer order value
 ```sql
