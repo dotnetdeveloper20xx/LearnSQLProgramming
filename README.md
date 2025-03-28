@@ -2572,28 +2572,253 @@ SELECT * FROM Calendar;
 **Why**: Use in time series reports.
 **How**: Simple date recursion.
 
+---
 
+### 11. Generate monthly intervals between two dates
+```sql
+WITH MonthSeries AS (
+  SELECT CAST('2023-01-01' AS DATE) AS MonthStart
+  UNION ALL
+  SELECT DATEADD(MONTH, 1, MonthStart)
+  FROM MonthSeries
+  WHERE MonthStart < '2023-12-01'
+)
+SELECT * FROM MonthSeries;
+```
+**What**: Generates months for reports.
+**Why**: Use in financial monthly reports.
+**How**: Recursive month increment.
 
+---
 
+### 12. Top 3 orders per customer using CTE + ranking
+```sql
+WITH RankedOrders AS (
+  SELECT o.*, ROW_NUMBER() OVER (PARTITION BY CustomerId ORDER BY OrderDate DESC) AS rn
+  FROM Orders o
+)
+SELECT * FROM RankedOrders WHERE rn <= 3;
+```
+**What**: Retrieve latest orders.
+**Why**: For summary emails.
+**How**: Use ROW_NUMBER in CTE.
 
+---
 
+### 13. Count total orders and value per customer
+```sql
+WITH CustomerOrders AS (
+  SELECT CustomerId, COUNT(*) AS TotalOrders,
+         SUM(oi.Quantity * oi.PriceAtPurchase) AS TotalSpent
+  FROM Orders o
+  JOIN OrderItems oi ON o.OrderId = oi.OrderId
+  GROUP BY CustomerId
+)
+SELECT * FROM CustomerOrders;
+```
+**What**: Summarizes customer activity.
+**Why**: For CRM dashboards.
+**How**: Aggregate in CTE.
 
+---
 
+### 14. Generate product combinations for testing
+```sql
+WITH Base AS (
+  SELECT ProductId FROM Products WHERE CategoryId = 1
+)
+SELECT a.ProductId AS Product1, b.ProductId AS Product2
+FROM Base a CROSS JOIN Base b
+WHERE a.ProductId < b.ProductId;
+```
+**What**: All pairings in category.
+**Why**: Bundle product suggestions.
+**How**: CROSS JOIN with filter.
 
+---
 
+### 15. Identify users with no recent orders
+```sql
+WITH LastOrders AS (
+  SELECT CustomerId, MAX(OrderDate) AS LastOrderDate
+  FROM Orders GROUP BY CustomerId
+)
+SELECT * FROM LastOrders WHERE LastOrderDate < DATEADD(MONTH, -6, GETDATE());
+```
+**What**: Identify dormant customers.
+**Why**: Trigger reactivation campaign.
+**How**: MAX(OrderDate) filter.
 
+---
 
+### 16. Flatten multilevel category tree to single line path
+```sql
+WITH Recurse AS (
+  SELECT CategoryId, CategoryName, ParentCategoryId,
+         CAST(CategoryName AS VARCHAR(MAX)) AS FullPath
+  FROM Categories WHERE ParentCategoryId IS NULL
 
+  UNION ALL
 
+  SELECT c.CategoryId, c.CategoryName, c.ParentCategoryId,
+         r.FullPath + ' > ' + c.CategoryName
+  FROM Categories c
+  JOIN Recurse r ON c.ParentCategoryId = r.CategoryId
+)
+SELECT * FROM Recurse;
+```
+**What**: Breadcrumb path.
+**Why**: Frontend menus.
+**How**: Recursive concat.
 
+---
 
+### 17. Show first product variant per product
+```sql
+WITH RankedVariants AS (
+  SELECT *, ROW_NUMBER() OVER (PARTITION BY ProductId ORDER BY CreatedAt) AS rn
+  FROM ProductVariants
+)
+SELECT * FROM RankedVariants WHERE rn = 1;
+```
+**What**: Base variant.
+**Why**: Product previews.
+**How**: Partition by ProductId.
 
+---
 
+### 18. Calculate weekly sales aggregates
+```sql
+WITH WeeklySales AS (
+  SELECT DATEPART(WEEK, OrderDate) AS WeekNum,
+         SUM(oi.Quantity * oi.PriceAtPurchase) AS TotalRevenue
+  FROM Orders o
+  JOIN OrderItems oi ON o.OrderId = oi.OrderId
+  GROUP BY DATEPART(WEEK, OrderDate)
+)
+SELECT * FROM WeeklySales;
+```
+**What**: Weekly revenue.
+**Why**: Sales tracking.
+**How**: Date grouping.
 
+---
 
+### 19. Rank categories by overall sales
+```sql
+WITH CategorySales AS (
+  SELECT c.CategoryId, c.CategoryName,
+         SUM(oi.Quantity * oi.PriceAtPurchase) AS Revenue
+  FROM OrderItems oi
+  JOIN ProductVariants v ON oi.VariantId = v.VariantId
+  JOIN Products p ON v.ProductId = p.ProductId
+  JOIN Categories c ON p.CategoryId = c.CategoryId
+  GROUP BY c.CategoryId, c.CategoryName
+)
+SELECT *, RANK() OVER (ORDER BY Revenue DESC) AS RankInRevenue
+FROM CategorySales;
+```
+**What**: Leaderboard by sales.
+**Why**: Inventory planning.
+**How**: CTE + RANK().
 
+---
 
+### 20. Compare customer order value to category average
+```sql
+WITH AvgPerCategory AS (
+  SELECT c.CategoryId,
+         AVG(oi.Quantity * oi.PriceAtPurchase) AS AvgValue
+  FROM OrderItems oi
+  JOIN ProductVariants v ON oi.VariantId = v.VariantId
+  JOIN Products p ON v.ProductId = p.ProductId
+  JOIN Categories c ON p.CategoryId = c.CategoryId
+  GROUP BY c.CategoryId
+)
+SELECT * FROM AvgPerCategory;
+```
+**What**: Benchmarks by category.
+**Why**: Product value alignment.
+**How**: AVG() aggregation.
 
+---
 
+### 21. Return top 3 categories by average review score
+```sql
+WITH AvgRatings AS (
+  SELECT c.CategoryName, AVG(r.Rating) AS AvgRating
+  FROM ProductRatings r
+  JOIN Products p ON r.ProductId = p.ProductId
+  JOIN Categories c ON p.CategoryId = c.CategoryId
+  GROUP BY c.CategoryName
+)
+SELECT TOP 3 * FROM AvgRatings ORDER BY AvgRating DESC;
+```
+**What**: Customer perception.
+**Why**: Quality control.
+**How**: AVG() + ranking.
+
+---
+
+### 22. Paginate product reviews in batches of 20
+```sql
+SELECT * FROM ProductRatings
+ORDER BY CreatedAt DESC
+OFFSET 0 ROWS FETCH NEXT 20 ROWS ONLY;
+```
+**What**: Fetch 1st page.
+**Why**: Frontend pagination.
+**How**: OFFSET/FETCH.
+
+---
+
+### 23. Generate day-of-week report from order dates
+```sql
+WITH DayStats AS (
+  SELECT DATENAME(WEEKDAY, OrderDate) AS DayName,
+         COUNT(*) AS Orders
+  FROM Orders
+  GROUP BY DATENAME(WEEKDAY, OrderDate)
+)
+SELECT * FROM DayStats;
+```
+**What**: Peak day insight.
+**Why**: Optimize ads.
+**How**: DATENAME + GROUP.
+
+---
+
+### 24. Paginate categories alphabetically, page 2 (rows 26–50)
+```sql
+SELECT * FROM Categories
+ORDER BY CategoryName
+OFFSET 25 ROWS FETCH NEXT 25 ROWS ONLY;
+```
+**What**: Page 2 display.
+**Why**: UI/UX.
+**How**: OFFSET.
+
+---
+
+### 25. Recursive depth tracker for category tree
+```sql
+WITH TreeDepth AS (
+  SELECT CategoryId, ParentCategoryId, 0 AS Depth
+  FROM Categories
+  WHERE ParentCategoryId IS NULL
+
+  UNION ALL
+
+  SELECT c.CategoryId, c.ParentCategoryId, td.Depth + 1
+  FROM Categories c
+  JOIN TreeDepth td ON c.ParentCategoryId = td.CategoryId
+)
+SELECT * FROM TreeDepth ORDER BY Depth;
+```
+**What**: Nesting level.
+**Why**: UI menu indentation.
+**How**: Recursive depth.
+
+---
 
 
