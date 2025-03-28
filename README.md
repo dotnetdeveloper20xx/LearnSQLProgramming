@@ -272,6 +272,116 @@ WHERE v.StockQuantity = 0;
 
 ---
 
+### 📊 Stage 2: Reporting & Aggregation Basics
+
+#### 🔬 Skills Covered:
+- Aggregate functions: `COUNT`, `SUM`, `AVG`, `MIN`, `MAX`
+- Grouping and Filtering with `GROUP BY`, `HAVING`
+- Filtering data with `WHERE`, `IN`, `BETWEEN`, `LIKE`
+- Sorting results with `ORDER BY`
+- Using `DISTINCT` to eliminate duplicates
+- Subqueries (Scalar, Correlated, `EXISTS`, `IN`, `ANY`, `ALL`)
+
+#### 💼 Objectives:
+- Generate insights and summaries from operational data
+- Create reusable queries for dashboards and analytics
+- Practice advanced filtering and data comparison logic
+
+#### 🔍 Example Queries:
+
+```sql
+-- Total number of customers
+SELECT COUNT(*) AS TotalCustomers FROM Customers;
+
+-- Total orders per customer
+SELECT CustomerId, COUNT(*) AS TotalOrders
+FROM Orders
+GROUP BY CustomerId
+ORDER BY TotalOrders DESC;
+
+-- Average order value
+SELECT AVG(PriceAtPurchase * Quantity) AS AvgOrderValue
+FROM OrderItems;
+
+-- Daily sales revenue
+SELECT CAST(OrderDate AS DATE) AS SaleDate,
+       SUM(oi.PriceAtPurchase * oi.Quantity) AS DailyRevenue
+FROM Orders o
+JOIN OrderItems oi ON o.OrderId = oi.OrderId
+GROUP BY CAST(OrderDate AS DATE)
+ORDER BY SaleDate DESC;
+
+-- Revenue per category
+SELECT c.Name AS Category, 
+       SUM(oi.PriceAtPurchase * oi.Quantity) AS Revenue
+FROM OrderItems oi
+JOIN ProductVariants v ON oi.VariantId = v.VariantId
+JOIN Products p ON v.ProductId = p.ProductId
+JOIN Categories c ON p.CategoryId = c.CategoryId
+GROUP BY c.Name
+ORDER BY Revenue DESC;
+
+-- Top 5 best-selling products
+SELECT TOP 5 p.Name, SUM(oi.Quantity) AS TotalSold
+FROM OrderItems oi
+JOIN ProductVariants v ON oi.VariantId = v.VariantId
+JOIN Products p ON v.ProductId = p.ProductId
+GROUP BY p.Name
+ORDER BY TotalSold DESC;
+
+-- Low stock alert (< 10 units)
+SELECT p.Name, v.SKU, v.StockQuantity
+FROM ProductVariants v
+JOIN Products p ON v.ProductId = p.ProductId
+WHERE v.StockQuantity < 10
+ORDER BY v.StockQuantity ASC;
+
+-- Customers with no orders (using NOT IN)
+SELECT * FROM Customers
+WHERE CustomerId NOT IN (
+    SELECT DISTINCT CustomerId FROM Orders
+);
+
+-- Customers with no orders (using NOT EXISTS)
+SELECT * FROM Customers c
+WHERE NOT EXISTS (
+    SELECT 1 FROM Orders o WHERE o.CustomerId = c.CustomerId
+);
+
+-- Products that have ever been ordered (using EXISTS)
+SELECT * FROM Products p
+WHERE EXISTS (
+    SELECT 1 FROM OrderItems oi
+    JOIN ProductVariants v ON oi.VariantId = v.VariantId
+    WHERE v.ProductId = p.ProductId
+);
+
+-- Customers who have placed more than 1 order and ordered high value items (using subquery and HAVING)
+SELECT CustomerId
+FROM Orders o
+WHERE o.OrderId IN (
+    SELECT OrderId FROM OrderItems
+    WHERE PriceAtPurchase > 1000
+)
+GROUP BY CustomerId
+HAVING COUNT(*) > 1;
+
+-- Customers with orders in ANY status: Delivered, Shipped
+SELECT * FROM Customers
+WHERE CustomerId = ANY (
+    SELECT CustomerId FROM Orders WHERE Status IN ('Delivered', 'Shipped')
+);
+```
+
+#### 🧵 What, Why, How
+- **What**: Advanced filters allow comparison and precise data slicing.
+- **Why**: Business logic often requires checking conditions like existence, membership, or value comparison across subqueries.
+- **How**: Use `EXISTS` for correlated checks, `IN` for set membership, and scalar subqueries for dynamic filtering.
+
+---
+
+
+
 
 
 
