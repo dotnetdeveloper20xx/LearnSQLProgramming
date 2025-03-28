@@ -1669,6 +1669,152 @@ ORDER BY total_worker_time DESC;
 
 ---
 
+### 📆 Stage 14: Advanced SQL Patterns & Final Project Integration
+
+#### 🔬 Concepts Introduced:
+- **Dynamic SQL**: Build and execute SQL dynamically
+- **PIVOT / UNPIVOT**: Rotate rows to columns for reporting
+- **JSON / XML Handling**: Store and extract structured data
+- **TVPs (Table-Valued Parameters)**: Pass table data into procedures
+- **Final Dashboard Queries**: Integrate reporting logic from all modules
+
+---
+
+#### 💼 Objectives:
+- Master advanced SQL programming techniques
+- Finalize reusable reporting modules and components
+- Prepare query layers for integration with front-end tools (e.g., Power BI)
+
+---
+
+### 🔍 Dynamic SQL Example
+
+```sql
+-- Build query based on a condition
+DECLARE @ColumnName NVARCHAR(50) = 'Region';
+DECLARE @SQL NVARCHAR(MAX);
+
+SET @SQL = 'SELECT ' + QUOTENAME(@ColumnName) + ', COUNT(*) AS CustomerCount FROM Customers GROUP BY ' + QUOTENAME(@ColumnName);
+EXEC sp_executesql @SQL;
+```
+
+---
+
+### 📊 PIVOT for Sales Reporting
+
+```sql
+-- Sales by product category across months
+SELECT * FROM (
+    SELECT FORMAT(OrderDate, 'yyyy-MM') AS OrderMonth, c.Name AS Category, oi.Quantity
+    FROM OrderItems oi
+    JOIN Orders o ON oi.OrderId = o.OrderId
+    JOIN ProductVariants v ON oi.VariantId = v.VariantId
+    JOIN Products p ON v.ProductId = p.ProductId
+    JOIN Categories c ON p.CategoryId = c.CategoryId
+) AS SourceTable
+PIVOT (
+    SUM(Quantity) FOR Category IN ([Shoes], [Bags], [Shirts])
+) AS PivotTable;
+```
+
+---
+
+### 🔎 JSON Support
+
+```sql
+-- Return customer data as JSON
+SELECT CustomerId, FullName, Email
+FROM Customers
+FOR JSON AUTO;
+
+-- Parse JSON input
+DECLARE @json NVARCHAR(MAX) = '{"ProductId": 1, "Quantity": 5}';
+SELECT *
+FROM OPENJSON(@json)
+WITH (ProductId INT, Quantity INT);
+```
+
+---
+
+### 📰 XML Support
+
+```sql
+-- Export order data as XML
+SELECT OrderId, OrderDate, Status
+FROM Orders
+FOR XML AUTO, ROOT('Orders');
+```
+
+---
+
+### 🚪 Table-Valued Parameter Example
+
+```sql
+-- Step 1: Create a TVP type
+CREATE TYPE OrderItemTVP AS TABLE (
+    VariantId INT,
+    Quantity INT,
+    PriceAtPurchase DECIMAL(10,2)
+);
+
+-- Step 2: Use it in a stored procedure
+CREATE PROCEDURE usp_InsertOrderItems
+    @OrderId INT,
+    @Items OrderItemTVP READONLY
+AS
+BEGIN
+    INSERT INTO OrderItems (OrderId, VariantId, Quantity, PriceAtPurchase)
+    SELECT @OrderId, VariantId, Quantity, PriceAtPurchase FROM @Items;
+END;
+```
+
+---
+
+### 🎯 Final Dashboard Query Integration Example
+
+```sql
+-- Daily KPIs: Total Sales, Orders, Revenue, Top Category
+WITH DailyData AS (
+    SELECT 
+        CAST(OrderDate AS DATE) AS Day,
+        COUNT(DISTINCT o.OrderId) AS Orders,
+        SUM(oi.Quantity) AS ItemsSold,
+        SUM(oi.Quantity * oi.PriceAtPurchase) AS Revenue,
+        c.Name AS Category
+    FROM Orders o
+    JOIN OrderItems oi ON o.OrderId = oi.OrderId
+    JOIN ProductVariants v ON oi.VariantId = v.VariantId
+    JOIN Products p ON v.ProductId = p.ProductId
+    JOIN Categories c ON p.CategoryId = c.CategoryId
+    GROUP BY CAST(OrderDate AS DATE), c.Name
+)
+SELECT Day, SUM(Orders) AS TotalOrders, SUM(ItemsSold) AS TotalItems, SUM(Revenue) AS TotalRevenue
+FROM DailyData
+GROUP BY Day
+ORDER BY Day DESC;
+```
+
+---
+
+### 🧵 Best Practices
+- Use **dynamic SQL** only when necessary and sanitize input
+- Use **TVPs** for batch inserts instead of looping
+- **Pivot/unpivot** only after filtering and cleaning data
+- Prefer **JSON** or **XML** for app-to-database data contracts
+
+---
+
+### 📍 CONGRATULATIONS!
+You've completed the full SQL Mastery Journey — from beginner data modeling to enterprise-grade dashboards, monitoring, ETL, auditing, and beyond.
+
+You now have:
+- A full-featured SQL database architecture
+- Modular reporting patterns
+- Admin, logging, and security layers
+- Real-time and historical tracking tools
+
+
+
 
 
 
