@@ -4113,4 +4113,263 @@ UNPIVOT (
 
 ---
 
+# ✅ Stage 7: JSON, XML, Dynamic SQL & Advanced Aggregation – Extending SQL Power
+
+This stage explores:
+- ✅ JSON & XML processing
+- ✅ Dynamic SQL for flexible queries
+- ✅ Advanced GROUPING SETS, ROLLUP, CUBE
+- ✅ Flexible schema manipulation
+
+Each question includes:
+- Real-world use case
+- What/Why/How format
+- Code with explanation
+
+---
+
+### 1–10: [Already included above]
+
+---
+
+### 11. Generate comma-separated customer names for each region
+```sql
+SELECT Region, STRING_AGG(FullName, ', ') AS Customers
+FROM Customers
+GROUP BY Region;
+```
+**What**: Region-based customer list.
+**Why**: Region-focused reports.
+**How**: Use STRING_AGG with GROUP BY.
+
+---
+
+### 12. Dynamic SQL to filter by product category
+```sql
+DECLARE @CategoryId INT = 2;
+DECLARE @sql NVARCHAR(MAX) =
+    'SELECT ProductId, ProductName FROM Products WHERE CategoryId = ' + CAST(@CategoryId AS NVARCHAR);
+EXEC sp_executesql @sql;
+```
+**What**: Flexible filtering.
+**Why**: Parameter-driven reports.
+**How**: Concatenate input into SQL.
+
+---
+
+### 13. Convert query output to JSON array with nesting
+```sql
+SELECT CustomerId,
+       (SELECT OrderId, OrderDate FROM Orders o WHERE o.CustomerId = c.CustomerId FOR JSON PATH) AS Orders
+FROM Customers c;
+```
+**What**: Nested objects.
+**Why**: Structured frontend data.
+**How**: JSON PATH subquery.
+
+---
+
+### 14. Parse JSON array into rows
+```sql
+DECLARE @json NVARCHAR(MAX) = '[{"Id": 1}, {"Id": 2}]';
+SELECT value AS RowData FROM OPENJSON(@json);
+```
+**What**: Expand array.
+**Why**: Loop-like row usage.
+**How**: OPENJSON root array.
+
+---
+
+### 15. Dynamic pivot for sales by month
+```sql
+DECLARE @columns NVARCHAR(MAX), @sql NVARCHAR(MAX);
+SELECT @columns = STRING_AGG(QUOTENAME(Month), ',')
+FROM (SELECT DISTINCT FORMAT(OrderDate, 'yyyy-MM') AS Month FROM Orders) AS Months;
+
+SET @sql = '
+SELECT ProductName, ' + @columns + '
+FROM (
+  SELECT p.ProductName, FORMAT(o.OrderDate, ''yyyy-MM'') AS Month, oi.Quantity
+  FROM Orders o
+  JOIN OrderItems oi ON o.OrderId = oi.OrderId
+  JOIN ProductVariants v ON oi.VariantId = v.VariantId
+  JOIN Products p ON v.ProductId = p.ProductId
+) AS SourceTable
+PIVOT (
+  SUM(Quantity) FOR Month IN (' + @columns + ')
+) AS PivotTable';
+
+EXEC sp_executesql @sql;
+```
+**What**: Monthly pivot.
+**Why**: Dynamic date columns.
+**How**: Dynamic PIVOT.
+
+---
+
+### 16. ROLLUP with COALESCE for report labels
+```sql
+SELECT COALESCE(c.CategoryName, 'TOTAL') AS Category,
+       SUM(oi.Quantity * oi.PriceAtPurchase) AS Revenue
+FROM OrderItems oi
+JOIN ProductVariants v ON oi.VariantId = v.VariantId
+JOIN Products p ON v.ProductId = p.ProductId
+JOIN Categories c ON p.CategoryId = c.CategoryId
+GROUP BY ROLLUP (c.CategoryName);
+```
+**What**: Label totals.
+**Why**: Friendly output.
+**How**: COALESCE null rows.
+
+---
+
+### 17. Return dynamic XML list of orders
+```sql
+SELECT CustomerId,
+       (SELECT OrderId, OrderDate FROM Orders o WHERE o.CustomerId = c.CustomerId FOR XML PATH('Order'), ROOT('Orders'), TYPE)
+FROM Customers c;
+```
+**What**: Hierarchical XML.
+**Why**: XML-based services.
+**How**: XML PATH with nesting.
+
+---
+
+### 18. Dynamic filter with multiple parameters
+```sql
+DECLARE @sql NVARCHAR(MAX);
+DECLARE @status NVARCHAR(50) = 'Shipped';
+DECLARE @region NVARCHAR(50) = 'West';
+
+SET @sql = 'SELECT * FROM Orders o JOIN Customers c ON o.CustomerId = c.CustomerId WHERE 1=1';
+IF @status IS NOT NULL SET @sql += ' AND o.Status = ''' + @status + '''';
+IF @region IS NOT NULL SET @sql += ' AND c.Region = ''' + @region + '''';
+EXEC sp_executesql @sql;
+```
+**What**: Multi-filter logic.
+**Why**: User-driven search.
+**How**: If-then dynamic SQL.
+
+---
+
+### 19. Combine JSON aggregation with GROUP BY
+```sql
+SELECT CustomerId,
+       (SELECT OrderId, OrderDate
+        FROM Orders o
+        WHERE o.CustomerId = c.CustomerId
+        FOR JSON PATH) AS OrdersJson
+FROM Customers c;
+```
+**What**: Pre-grouped JSON output.
+**Why**: API feed.
+**How**: JSON PATH per group.
+
+---
+
+### 20. Generate XML for order invoice
+```sql
+SELECT o.OrderId, o.OrderDate,
+       (SELECT ProductId, Quantity FROM OrderItems oi WHERE oi.OrderId = o.OrderId FOR XML PATH('Item'), TYPE)
+FROM Orders o
+WHERE OrderId = 1234
+FOR XML PATH('Invoice'), ROOT('Invoices');
+```
+**What**: Invoice format.
+**Why**: Export compliance.
+**How**: XML PATH + nested.
+
+---
+
+### 21. PIVOT using dynamic categories
+```sql
+DECLARE @cols NVARCHAR(MAX), @query NVARCHAR(MAX);
+SELECT @cols = STRING_AGG(QUOTENAME(CategoryName), ',')
+FROM (SELECT DISTINCT c.CategoryName FROM Products p JOIN Categories c ON p.CategoryId = c.CategoryId) AS t;
+
+SET @query = '
+SELECT Region, ' + @cols + '
+FROM (
+  SELECT c.Region, cat.CategoryName, oi.Quantity
+  FROM Orders o
+  JOIN Customers c ON o.CustomerId = c.CustomerId
+  JOIN OrderItems oi ON o.OrderId = oi.OrderId
+  JOIN ProductVariants v ON oi.VariantId = v.VariantId
+  JOIN Products p ON v.ProductId = p.ProductId
+  JOIN Categories cat ON p.CategoryId = cat.CategoryId
+) AS src
+PIVOT (
+  SUM(Quantity) FOR CategoryName IN (' + @cols + ')
+) AS pvt';
+
+EXEC sp_executesql @query;
+```
+**What**: Dynamic category pivot.
+**Why**: Flexible columns.
+**How**: Dynamic PIVOT.
+
+---
+
+### 22. Use JSON_VALUE for field access
+```sql
+DECLARE @json NVARCHAR(MAX) = '{ "Customer": { "Name": "Alice" } }';
+SELECT JSON_VALUE(@json, '$.Customer.Name') AS CustomerName;
+```
+**What**: Extract value.
+**Why**: JSON field targeting.
+**How**: `JSON_VALUE()`.
+
+---
+
+### 23. JSON_ARRAY_AGG emulation with STRING_AGG
+```sql
+SELECT CustomerId,
+       '[' + STRING_AGG('"' + ProductName + '"', ',') + ']' AS ProductArray
+FROM (
+    SELECT o.CustomerId, p.ProductName
+    FROM Orders o
+    JOIN OrderItems oi ON o.OrderId = oi.OrderId
+    JOIN ProductVariants v ON oi.VariantId = v.VariantId
+    JOIN Products p ON v.ProductId = p.ProductId
+) AS t
+GROUP BY CustomerId;
+```
+**What**: Emulate JSON array.
+**Why**: Compatibility.
+**How**: Manual string format.
+
+---
+
+### 24. JSON_QUERY for entire nested object
+```sql
+DECLARE @json NVARCHAR(MAX) = '{ "Customer": { "Id": 1, "Name": "Bob" } }';
+SELECT JSON_QUERY(@json, '$.Customer') AS CustomerObj;
+```
+**What**: Extract object.
+**Why**: Preserve JSON.
+**How**: `JSON_QUERY()`.
+
+---
+
+### 25. Aggregate sales using GROUPING SETS
+```sql
+SELECT c.Region, p.CategoryId, SUM(oi.Quantity * oi.PriceAtPurchase) AS Revenue
+FROM Orders o
+JOIN Customers c ON o.CustomerId = c.CustomerId
+JOIN OrderItems oi ON o.OrderId = oi.OrderId
+JOIN ProductVariants v ON oi.VariantId = v.VariantId
+JOIN Products p ON v.ProductId = p.ProductId
+GROUP BY GROUPING SETS (
+    (c.Region, p.CategoryId),
+    (c.Region),
+    (p.CategoryId),
+    ()
+);
+```
+**What**: Custom subtotal layout.
+**Why**: Reporting cube control.
+**How**: `GROUPING SETS()`.
+
+---
+
 
