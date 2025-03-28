@@ -5218,4 +5218,297 @@ SELECT * FROM Orders WHERE OrderId = 100;
 
 ---
 
+# ✅ Stage 10: SQL Server Security, Permissions, and Hardening
+
+This stage focuses on:
+- ✅ Managing users and roles
+- ✅ Granting and revoking permissions
+- ✅ Row-level security and schema hardening
+- ✅ Best practices for secure database operations
+
+Each of the 25 questions includes:
+- Real-world use case
+- What, Why, and How explanation
+- Fully commented SQL examples
+
+---
+
+### 1. Create a SQL login and user for a developer
+```sql
+CREATE LOGIN DevUser WITH PASSWORD = 'StrongPassword123';
+CREATE USER DevUser FOR LOGIN DevUser;
+```
+**What**: Creates SQL login and maps it to DB user.
+**Why**: Authenticated DB access.
+**How**: Two-step login-to-user mapping.
+
+---
+
+### 2. Grant SELECT permission on Products to DevUser
+```sql
+GRANT SELECT ON Products TO DevUser;
+```
+**What**: Allows read access.
+**Why**: Least privilege principle.
+**How**: `GRANT` specific table permission.
+
+---
+
+### 3. Revoke SELECT permission from DevUser
+```sql
+REVOKE SELECT ON Products FROM DevUser;
+```
+**What**: Removes access.
+**Why**: Access restriction.
+**How**: `REVOKE` statement.
+
+---
+
+### 4. Create a database role and assign permissions
+```sql
+CREATE ROLE SalesReporter;
+GRANT SELECT ON Orders TO SalesReporter;
+GRANT SELECT ON OrderItems TO SalesReporter;
+EXEC sp_addrolemember 'SalesReporter', 'DevUser';
+```
+**What**: Role-based control.
+**Why**: Easier group permission.
+**How**: Role creation + assignment.
+
+---
+
+### 5. Deny DELETE on Products table for DevUser
+```sql
+DENY DELETE ON Products TO DevUser;
+```
+**What**: Prevents data loss.
+**Why**: Safety net.
+**How**: `DENY` overrides `GRANT`.
+
+---
+
+### 6. Check effective permissions for a user
+```sql
+SELECT * FROM fn_my_permissions(NULL, 'DATABASE');
+```
+**What**: Lists active rights.
+**Why**: Review permissions.
+**How**: Built-in function.
+
+---
+
+### 7. Assign schema-level permission
+```sql
+GRANT SELECT, INSERT ON SCHEMA::Sales TO DevUser;
+```
+**What**: Grant at schema level.
+**Why**: Broad table coverage.
+**How**: SCHEMA keyword.
+
+---
+
+### 8. Create contained database user without login
+```sql
+CREATE USER AppUser WITH PASSWORD = 'AppSecurePass1!';
+```
+**What**: Loginless access.
+**Why**: Supports cloud/contained DB.
+**How**: Local-only user.
+
+---
+
+### 9. Enable row-level security (RLS) for Orders
+```sql
+CREATE FUNCTION fn_RLSFilter (@UserId INT)
+RETURNS TABLE
+WITH SCHEMABINDING
+AS
+    RETURN SELECT 1 AS Result WHERE @UserId = USER_ID();
+
+CREATE SECURITY POLICY OrderPolicy
+ADD FILTER PREDICATE dbo.fn_RLSFilter(UserId) ON dbo.Orders
+WITH (STATE = ON);
+```
+**What**: Restrict by user.
+**Why**: Enforce access rows.
+**How**: RLS policy.
+
+---
+
+### 10. Create a login with default database
+```sql
+CREATE LOGIN Analyst WITH PASSWORD = 'StrongPwd!456', DEFAULT_DATABASE = SalesDB;
+```
+**What**: Sets login defaults.
+**Why**: Dev/analyst convenience.
+**How**: `DEFAULT_DATABASE` clause.
+
+---
+
+### 11. Create a read-only role for analysts
+```sql
+CREATE ROLE ReadOnlyAccess;
+GRANT SELECT ON SCHEMA::dbo TO ReadOnlyAccess;
+EXEC sp_addrolemember 'ReadOnlyAccess', 'Analyst';
+```
+**What**: Read-only role.
+**Why**: Data protection.
+**How**: SCHEMA-based GRANT.
+
+---
+
+### 12. Drop a user and role safely
+```sql
+EXEC sp_droprolemember 'SalesReporter', 'DevUser';
+DROP USER DevUser;
+DROP ROLE SalesReporter;
+```
+**What**: Cleanup access.
+**Why**: Avoid orphan roles/users.
+**How**: Use `sp_droprolemember` first.
+
+---
+
+### 13. Enforce password policy on login creation
+```sql
+CREATE LOGIN SecureLogin WITH PASSWORD = 'MySecurePass123!' CHECK_POLICY = ON;
+```
+**What**: Follows Windows policy.
+**Why**: Enforce strength.
+**How**: CHECK_POLICY clause.
+
+---
+
+### 14. View all database users
+```sql
+SELECT name, type_desc FROM sys.database_principals
+WHERE type IN ('S', 'U', 'G') AND name NOT LIKE 'db_%';
+```
+**What**: User overview.
+**Why**: Audit access.
+**How**: System table filter.
+
+---
+
+### 15. Grant stored procedure execution only
+```sql
+GRANT EXECUTE ON dbo.GetCustomerOrders TO DevUser;
+```
+**What**: Allow use, not data.
+**Why**: Secure API model.
+**How**: GRANT EXECUTE.
+
+---
+
+### 16. Assign CONTROL permission to manage object
+```sql
+GRANT CONTROL ON Orders TO DevUser;
+```
+**What**: Full object-level control.
+**Why**: Object owner privileges.
+**How**: CONTROL = highest object-level right.
+
+---
+
+### 17. Deny DROP on a table
+```sql
+DENY ALTER, CONTROL ON Products TO DevUser;
+```
+**What**: Prevent object drop.
+**Why**: Hardening.
+**How**: DENY key permissions.
+
+---
+
+### 18. Prevent privilege escalation
+```sql
+-- NEVER grant ALTER ANY LOGIN or CONTROL SERVER unless absolutely required
+DENY ALTER ANY LOGIN TO DevUser;
+```
+**What**: Avoid escalation.
+**Why**: Security boundary.
+**How**: DENY at server level.
+
+---
+
+### 19. Assign db_datareader and db_datawriter roles
+```sql
+EXEC sp_addrolemember 'db_datareader', 'DevUser';
+EXEC sp_addrolemember 'db_datawriter', 'DevUser';
+```
+**What**: Built-in roles.
+**Why**: Default read/write.
+**How**: `sp_addrolemember`.
+
+---
+
+### 20. Create login with expiration policy
+```sql
+CREATE LOGIN TempUser WITH PASSWORD = 'TempPass123!' MUST_CHANGE, CHECK_EXPIRATION = ON;
+```
+**What**: Enforce change.
+**Why**: Expiring credentials.
+**How**: MUST_CHANGE + CHECK_EXPIRATION.
+
+---
+
+### 21. View current user's permissions
+```sql
+SELECT * FROM fn_my_permissions(NULL, 'DATABASE');
+```
+**What**: Session audit.
+**Why**: Verify access.
+**How**: Built-in function.
+
+---
+
+### 22. Limit user to specific IP using firewall (external)
+```bash
+# Outside SQL Server – configure firewall rule to restrict source IP
+```
+**What**: Layered security.
+**Why**: Network-level protection.
+**How**: Infrastructure config.
+
+---
+
+### 23. Restrict UPDATE to only certain columns
+```sql
+GRANT UPDATE (Email, PhoneNumber) ON Customers TO DevUser;
+```
+**What**: Partial update.
+**Why**: Field-level control.
+**How**: Column-specific GRANT.
+
+---
+
+### 24. View all user permissions on a table
+```sql
+SELECT * FROM fn_my_permissions('Products', 'OBJECT');
+```
+**What**: Granular check.
+**Why**: Validate access.
+**How**: fn_my_permissions.
+
+---
+
+### 25. Audit schema changes using DDL triggers
+```sql
+CREATE TRIGGER trg_DDL_Log
+ON DATABASE
+FOR CREATE_TABLE, ALTER_TABLE, DROP_TABLE
+AS
+BEGIN
+    INSERT INTO SchemaAuditLog (EventType, ObjectName, EventTime)
+    SELECT EVENTDATA().value('(/EVENT_INSTANCE/EventType)[1]', 'NVARCHAR(100)'),
+           EVENTDATA().value('(/EVENT_INSTANCE/ObjectName)[1]', 'NVARCHAR(100)'),
+           GETDATE();
+END;
+```
+**What**: Schema change trace.
+**Why**: Governance.
+**How**: DDL trigger + EVENTDATA.
+
+---
+
 
