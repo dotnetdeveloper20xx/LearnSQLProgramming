@@ -1,5 +1,3 @@
-# LearnSQLProgramming
-
 # SQL Mastery Project: Enterprise E-Commerce Database Roadmap
 
 ## 🌟 Project Overview
