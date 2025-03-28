@@ -542,6 +542,112 @@ GROUP BY CustomerId;
 
 ---
 
+### 🔄 Stage 5: CTEs, Recursion & Pagination
+
+#### 🔬 Skills Covered:
+- Common Table Expressions (CTEs)
+- Recursive CTEs
+- Drill-down and hierarchy processing
+- Pagination using `OFFSET` / `FETCH`
+
+#### 💼 Objectives:
+- Create readable multi-step queries using CTEs
+- Handle hierarchical data like category trees
+- Implement pagination for large result sets
+
+#### 🔍 Example Queries:
+
+```sql
+-- 1. Basic CTE: Calculate total order amount per order
+WITH OrderTotals AS (
+    SELECT 
+        o.OrderId,
+        o.CustomerId,
+        SUM(oi.PriceAtPurchase * oi.Quantity) AS TotalAmount
+    FROM Orders o
+    JOIN OrderItems oi ON o.OrderId = oi.OrderId
+    GROUP BY o.OrderId, o.CustomerId
+)
+SELECT * FROM OrderTotals;
+
+-- 2. Recursive CTE: Build category tree structure
+WITH CategoryHierarchy AS (
+    -- Base level (root categories with no parent)
+    SELECT CategoryId, Name, ParentCategoryId, 0 AS Level
+    FROM Categories
+    WHERE ParentCategoryId IS NULL
+
+    UNION ALL
+
+    -- Recursive part (children of each category)
+    SELECT c.CategoryId, c.Name, c.ParentCategoryId, ch.Level + 1
+    FROM Categories c
+    JOIN CategoryHierarchy ch ON c.ParentCategoryId = ch.CategoryId
+)
+SELECT * FROM CategoryHierarchy
+ORDER BY Level, Name;
+
+-- 3. Simple pagination (Page 1: First 10 products)
+SELECT ProductId, Name, Price
+FROM Products
+ORDER BY Name
+OFFSET 0 ROWS FETCH NEXT 10 ROWS ONLY;  -- Skip 0 rows, return next 10
+
+-- 4. Pagination (Page 2: Rows 11-20)
+SELECT ProductId, Name, Price
+FROM Products
+ORDER BY Name
+OFFSET 10 ROWS FETCH NEXT 10 ROWS ONLY;  -- Skip first 10 rows
+
+-- 5. Pagination with filters and total count using CTE
+WITH FilteredProducts AS (
+    SELECT ProductId, Name, Price
+    FROM Products
+    WHERE Price BETWEEN 100 AND 500   -- Filter by price range
+)
+SELECT *
+FROM FilteredProducts
+ORDER BY Name
+OFFSET 0 ROWS FETCH NEXT 5 ROWS ONLY;  -- Apply pagination to filtered results
+
+-- 6. Customer order history - paginated with search by name
+DECLARE @CustomerName NVARCHAR(100) = 'John';
+DECLARE @PageNumber INT = 2;
+DECLARE @PageSize INT = 5;
+
+SELECT o.OrderId, o.OrderDate, c.FullName
+FROM Orders o
+JOIN Customers c ON o.CustomerId = c.CustomerId
+WHERE c.FullName LIKE @CustomerName + '%'
+ORDER BY o.OrderDate DESC
+OFFSET (@PageNumber - 1) * @PageSize ROWS FETCH NEXT @PageSize ROWS ONLY;
+-- Page 2: skips first 5 rows, shows rows 6-10
+
+-- 7. Paginated view of best-selling products
+WITH ProductSales AS (
+    SELECT 
+        p.ProductId, 
+        p.Name, 
+        SUM(oi.Quantity) AS TotalSold
+    FROM OrderItems oi
+    JOIN ProductVariants v ON oi.VariantId = v.VariantId
+    JOIN Products p ON v.ProductId = p.ProductId
+    GROUP BY p.ProductId, p.Name
+)
+SELECT *
+FROM ProductSales
+ORDER BY TotalSold DESC
+OFFSET 0 ROWS FETCH NEXT 10 ROWS ONLY;  -- Top 10 sellers, page 1
+```
+
+#### 🧵 What, Why, How
+- **What**: CTEs simplify logic for multi-step or recursive problems.
+- **Why**: Improves readability and reuse; pagination avoids data overload on UI.
+- **How**: Use `WITH` to define reusable subqueries, and `OFFSET/FETCH` to implement pagination logic for any query result.
+
+---
+
+
 
 
 
