@@ -1815,6 +1815,150 @@ You now have:
 
 
 
+# 🧠 SQL Interview & Certification Preparation Pack – Full Code + What, Why, How
+
+This guide contains **detailed SQL interview questions and answers**, categorized by topic, with full code examples and explanations to help you master both **SQL certification exams** and **real-world technical interviews**.
+
+Each section below corresponds to stages of learning, starting from beginner to expert-level SQL.
+
+---
+
+## ✅ Stage 1: SELECT, JOIN, GROUP BY – Basic Foundations
+
+### 1. Get total number of orders per customer
+```sql
+SELECT CustomerId, COUNT(*) AS TotalOrders
+FROM Orders
+GROUP BY CustomerId;
+```
+**What**: Count of rows per customer.
+**Why**: Measures customer engagement.
+**How**: `GROUP BY` aggregates data per unique CustomerId.
+
+---
+
+### 2. List customers with their total spending
+```sql
+SELECT o.CustomerId, SUM(oi.Quantity * oi.PriceAtPurchase) AS TotalSpent
+FROM Orders o
+JOIN OrderItems oi ON o.OrderId = oi.OrderId
+GROUP BY o.CustomerId;
+```
+**What**: Total amount each customer has spent.
+**Why**: Used in customer lifetime value analysis.
+**How**: `JOIN` and aggregate function `SUM` calculate total.
+
+---
+
+### 3. Find products with no sales
+```sql
+SELECT p.ProductId, p.ProductName
+FROM Products p
+LEFT JOIN ProductVariants v ON p.ProductId = v.ProductId
+LEFT JOIN OrderItems oi ON v.VariantId = oi.VariantId
+WHERE oi.OrderItemId IS NULL;
+```
+**What**: Products never purchased.
+**Why**: Useful for inventory clean-up or promotions.
+**How**: `LEFT JOIN` followed by `NULL` filter.
+
+---
+
+### 4. Count total variants per product
+```sql
+SELECT ProductId, COUNT(*) AS VariantCount
+FROM ProductVariants
+GROUP BY ProductId;
+```
+**What**: Shows product diversity.
+**Why**: Useful for category management.
+**How**: `COUNT(*)` grouped by ProductId.
+
+---
+
+### 5. Get average order value
+```sql
+SELECT AVG(OrderTotal) AS AvgOrderValue
+FROM (
+    SELECT o.OrderId, SUM(oi.Quantity * oi.PriceAtPurchase) AS OrderTotal
+    FROM Orders o
+    JOIN OrderItems oi ON o.OrderId = oi.OrderId
+    GROUP BY o.OrderId
+) AS OrderTotals;
+```
+**What**: Average of all order totals.
+**Why**: Key KPI in e-commerce analytics.
+**How**: Nested query calculates each order total.
+
+---
+
+### 6. Retrieve customers who made more than 3 orders
+```sql
+SELECT CustomerId, COUNT(*) AS OrderCount
+FROM Orders
+GROUP BY CustomerId
+HAVING COUNT(*) > 3;
+```
+**What**: High-engagement customers.
+**Why**: Potential for loyalty programs.
+**How**: `HAVING` filters after grouping.
+
+---
+
+### 7. List customers who have not ordered anything
+```sql
+SELECT c.CustomerId, c.FullName
+FROM Customers c
+LEFT JOIN Orders o ON c.CustomerId = o.CustomerId
+WHERE o.OrderId IS NULL;
+```
+**What**: Detects inactive users.
+**Why**: Useful for re-marketing campaigns.
+**How**: `LEFT JOIN` + `NULL` filter.
+
+---
+
+### 8. List products ordered in January 2024
+```sql
+SELECT DISTINCT p.ProductId, p.ProductName
+FROM Products p
+JOIN ProductVariants v ON p.ProductId = v.ProductId
+JOIN OrderItems oi ON v.VariantId = oi.VariantId
+JOIN Orders o ON oi.OrderId = o.OrderId
+WHERE o.OrderDate BETWEEN '2024-01-01' AND '2024-01-31';
+```
+**What**: Products purchased during a date range.
+**Why**: Useful for seasonal trend analysis.
+**How**: `JOINs` and date filtering.
+
+---
+
+### 9. Top 5 best-selling product variants
+```sql
+SELECT TOP 5 VariantId, SUM(Quantity) AS TotalSold
+FROM OrderItems
+GROUP BY VariantId
+ORDER BY TotalSold DESC;
+```
+**What**: Most popular products.
+**Why**: Stock forecasting.
+**How**: Use `TOP` and `ORDER BY`.
+
+---
+
+### 10. Most recent orders per customer
+```sql
+SELECT CustomerId, MAX(OrderDate) AS LastOrderDate
+FROM Orders
+GROUP BY CustomerId;
+```
+**What**: Customer recency.
+**Why**: Used in RFM segmentation.
+**How**: `MAX` finds latest date per group.
+
+---
+
+
 
 
 
