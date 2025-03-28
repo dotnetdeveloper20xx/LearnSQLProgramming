@@ -1266,6 +1266,133 @@ WHERE ModifiedAt > (SELECT MAX(ModifiedAt) FROM FactSales);
 ---
 
 
+### 🔐 Stage 11: Security, Roles & Row-Level Access (Comprehensive Guide)
+
+#### 🔬 Core Concepts
+
+**Authentication**: Identifies who is accessing the system (e.g., SQL Login, Windows Auth).
+
+**Authorization**: Defines what resources a user can access or modify (`GRANT`, `DENY`, `REVOKE`).
+
+**Principals**: Security identities such as `LOGIN`, `USER`, `ROLE`.
+
+**Securables**: Objects like tables, views, schemas, or procedures.
+
+**Roles**: Groups of permissions to simplify access control (`db_datareader`, custom roles).
+
+**Row-Level Security (RLS)**: Filter rows dynamically based on the logged-in user.
+
+---
+
+### 💼 Best Practices for SQL Server Security
+- Never grant access directly to users — use roles.
+- Use least privilege: only give the minimum required permission.
+- Separate users by role: Readers, Editors, Admins, Auditors.
+- Use views/stored procedures to hide sensitive logic or columns.
+- Always audit who can read or write to sensitive data (email, address, salary).
+
+---
+
+### 🔍 Security Examples with Full Comments
+
+```sql
+-- 1. Create a SQL login (at server level)
+CREATE LOGIN readonly_user WITH PASSWORD = 'StrongP@ssw0rd';
+
+-- 2. Create a database user mapped to that login
+USE EcommerceDB;
+CREATE USER readonly_user FOR LOGIN readonly_user;
+
+-- 3. Create a role to manage permissions
+CREATE ROLE ReportingReaders;
+
+-- 4. Grant read-only access to all tables in dbo schema
+GRANT SELECT ON SCHEMA::dbo TO ReportingReaders;
+
+-- 5. Add user to role
+EXEC sp_addrolemember 'ReportingReaders', 'readonly_user';
+```
+
+```sql
+-- 6. Revoke sensitive column or table access from user directly
+DENY SELECT ON dbo.Customers(Email) TO readonly_user;
+```
+
+```sql
+-- 7. Secure access using views only
+REVOKE SELECT ON dbo.Orders TO readonly_user;
+GRANT SELECT ON dbo.vw_OrdersPublic TO readonly_user;
+```
+
+---
+
+### 🔓 Row-Level Security (RLS) Explained with Region Example
+
+```sql
+-- 1. Setup a mapping table for users and their region access
+CREATE TABLE SecurityRegionMap (
+    UserName SYSNAME PRIMARY KEY,   -- System user name
+    Region NVARCHAR(100)            -- Allowed region
+);
+
+-- 2. Insert user-specific region access
+INSERT INTO SecurityRegionMap VALUES
+('maria_reader', 'South'),
+('john_reader', 'North');
+```
+
+```sql
+-- 3. Create inline table-valued function for filtering rows
+CREATE FUNCTION dbo.fn_FilterCustomersByRegion(@Region NVARCHAR(100))
+RETURNS TABLE
+WITH SCHEMABINDING
+AS
+RETURN
+    SELECT 1 AS Allowed
+    FROM dbo.SecurityRegionMap
+    WHERE Region = @Region AND UserName = USER_NAME();  -- USER_NAME() = current user
+```
+
+```sql
+-- 4. Apply RLS policy using security function above
+CREATE SECURITY POLICY CustomerRegionPolicy
+ADD FILTER PREDICATE dbo.fn_FilterCustomersByRegion(Region)
+ON dbo.Customers
+WITH (STATE = ON);
+```
+
+-- ✅ Result: Users only see customers from their assigned region.
+
+---
+
+### 🧵 Auditing Permissions
+
+```sql
+-- View all permissions granted
+SELECT pr.name AS Principal, pe.permission_name, pe.state_desc, obj.name AS Object
+FROM sys.database_permissions pe
+JOIN sys.database_principals pr ON pe.grantee_principal_id = pr.principal_id
+LEFT JOIN sys.objects obj ON pe.major_id = obj.object_id
+ORDER BY pr.name, obj.name;
+```
+
+```sql
+-- Check user role memberships
+EXEC sp_helprolemember 'ReportingReaders';
+```
+
+---
+
+### 🕵️ Advanced Use Cases
+- Apply **RLS by Department, Region, or StoreId**
+- Combine RLS with **secure views** to protect both rows and columns
+- Use stored procedures with **EXECUTE AS** to delegate secure access
+- Implement **DDL triggers** to prevent unauthorized object changes
+
+---
+
+
+
 
 
 
