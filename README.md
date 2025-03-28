@@ -380,6 +380,84 @@ WHERE CustomerId = ANY (
 
 ---
 
+### 🔗 Stage 3: Intermediate Queries & Joins
+
+#### 🔬 Skills Covered:
+- Join types: `INNER JOIN`, `LEFT JOIN`, `RIGHT JOIN`, `FULL OUTER JOIN`
+- Multi-level joins
+- Subqueries inside joins
+- Creating reusable views
+- Handling NULLs and unmatched rows
+
+#### 💼 Objectives:
+- Extract meaningful combined data across multiple entities
+- Create reusable query layers using views
+- Explore different join patterns for data completeness
+
+#### 🔍 Example Queries:
+
+```sql
+-- List all customers and their orders (even if they haven’t placed any)
+SELECT c.FullName, o.OrderId, o.OrderDate
+FROM Customers c
+LEFT JOIN Orders o ON c.CustomerId = o.CustomerId;
+
+-- Products and their total ordered quantity
+SELECT p.Name, SUM(oi.Quantity) AS TotalOrdered
+FROM Products p
+LEFT JOIN ProductVariants v ON p.ProductId = v.ProductId
+LEFT JOIN OrderItems oi ON v.VariantId = oi.VariantId
+GROUP BY p.Name;
+
+-- Orders that have no items
+SELECT o.OrderId, o.OrderDate
+FROM Orders o
+LEFT JOIN OrderItems oi ON o.OrderId = oi.OrderId
+WHERE oi.OrderItemId IS NULL;
+
+-- Full join to compare customers and support tickets
+SELECT c.FullName, s.TicketId
+FROM Customers c
+FULL OUTER JOIN SupportTickets s ON c.CustomerId = s.CustomerId;
+
+-- Products that are never ordered
+SELECT p.Name
+FROM Products p
+LEFT JOIN ProductVariants v ON p.ProductId = v.ProductId
+LEFT JOIN OrderItems oi ON v.VariantId = oi.VariantId
+WHERE oi.OrderItemId IS NULL;
+
+-- Orders and matching shipments (view for dispatch tracking)
+CREATE VIEW vw_OrderDispatchStatus AS
+SELECT o.OrderId, o.OrderDate, d.ShipmentDate, d.Status
+FROM Orders o
+LEFT JOIN Deliveries d ON o.OrderId = d.OrderId;
+
+-- View: customer purchase history
+CREATE VIEW vw_CustomerPurchaseHistory AS
+SELECT c.FullName, p.Name AS ProductName, oi.Quantity, o.OrderDate
+FROM Customers c
+JOIN Orders o ON c.CustomerId = o.CustomerId
+JOIN OrderItems oi ON o.OrderId = oi.OrderId
+JOIN ProductVariants v ON oi.VariantId = v.VariantId
+JOIN Products p ON v.ProductId = p.ProductId;
+
+-- View: product inventory overview
+CREATE VIEW vw_ProductInventoryOverview AS
+SELECT p.Name, v.SKU, v.Color, v.Size, v.StockQuantity
+FROM ProductVariants v
+JOIN Products p ON v.ProductId = p.ProductId;
+```
+
+#### 🧵 What, Why, How
+- **What**: Joins let us connect related data across normalized tables.
+- **Why**: Business decisions often require data from multiple sources.
+- **How**: Use `LEFT JOIN` for inclusiveness, `INNER JOIN` for strict matching, and views to encapsulate logic.
+
+---
+
+
+
 
 
 
