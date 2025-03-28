@@ -1956,7 +1956,275 @@ GROUP BY CustomerId;
 **Why**: Used in RFM segmentation.
 **How**: `MAX` finds latest date per group.
 
+
+## ✅ Stage 2: Window Functions – Ranking & Time-Series Analysis
+
+
+### 11. Compare order values with average customer order value
+```sql
+SELECT 
+    OrderId,
+    CustomerId,
+    SUM(oi.Quantity * oi.PriceAtPurchase) AS OrderValue,
+    AVG(SUM(oi.Quantity * oi.PriceAtPurchase)) OVER (PARTITION BY o.CustomerId) AS AvgOrderValue
+FROM Orders o
+JOIN OrderItems oi ON o.OrderId = oi.OrderId
+GROUP BY OrderId, CustomerId;
+```
+**What**: Compares a specific order value against that customer's average.
+**Why**: Find outliers or unusual purchases.
+**How**: `AVG(...) OVER` computes per partition.
+
 ---
+
+### 12. Percentage of total spend per order
+```sql
+WITH CustomerSpending AS (
+    SELECT o.OrderId, o.CustomerId,
+           SUM(oi.Quantity * oi.PriceAtPurchase) AS OrderValue
+    FROM Orders o
+    JOIN OrderItems oi ON o.OrderId = oi.OrderId
+    GROUP BY o.OrderId, o.CustomerId
+)
+SELECT *,
+       100.0 * OrderValue / SUM(OrderValue) OVER (PARTITION BY CustomerId) AS PercentOfTotal
+FROM CustomerSpending;
+```
+**What**: Contribution of each order to total customer spend.
+**Why**: Identify large or small orders.
+**How**: Ratio over window total.
+
+---
+
+### 13. Customer activity streaks: number of days since last order
+```sql
+SELECT 
+    CustomerId,
+    OrderDate,
+    DATEDIFF(DAY, LAG(OrderDate) OVER (PARTITION BY CustomerId ORDER BY OrderDate), OrderDate) AS GapFromLast
+FROM Orders;
+```
+**What**: Time between purchases.
+**Why**: Customer churn signal.
+**How**: `LAG()` gives previous row.
+
+---
+
+### 14. Show running rank of customers by total sales over time
+```sql
+WITH SalesByDate AS (
+    SELECT CustomerId, OrderDate, 
+           SUM(oi.Quantity * oi.PriceAtPurchase) AS DailySpend
+    FROM Orders o
+    JOIN OrderItems oi ON o.OrderId = oi.OrderId
+    GROUP BY CustomerId, OrderDate
+)
+SELECT *,
+       RANK() OVER (PARTITION BY OrderDate ORDER BY DailySpend DESC) AS RankThatDay
+FROM SalesByDate;
+```
+**What**: Daily sales leaderboard.
+**Why**: Gamification, promotions.
+**How**: Partition by OrderDate.
+
+---
+
+### 15. Add revenue difference from previous order
+```sql
+SELECT 
+    OrderId,
+    CustomerId,
+    OrderDate,
+    Revenue,
+    Revenue - LAG(Revenue) OVER (PARTITION BY CustomerId ORDER BY OrderDate) AS RevenueDelta
+FROM (
+    SELECT o.OrderId, o.CustomerId, o.OrderDate, 
+           SUM(oi.Quantity * oi.PriceAtPurchase) AS Revenue
+    FROM Orders o
+    JOIN OrderItems oi ON o.OrderId = oi.OrderId
+    GROUP BY o.OrderId, o.CustomerId, o.OrderDate
+) AS RevenueTable;
+```
+**What**: Order-to-order revenue changes.
+**Why**: Spot sudden spending surges or drops.
+**How**: `LAG()` + math on outer query.
+
+---
+
+### 16. Detect first-time and repeat buyers
+```sql
+SELECT 
+    OrderId,
+    CustomerId,
+    CASE WHEN ROW_NUMBER() OVER (PARTITION BY CustomerId ORDER BY OrderDate) = 1 THEN 'First Time' ELSE 'Repeat' END AS BuyerType
+FROM Orders;
+```
+**What**: Labels customers.
+**Why**: Tailor welcome vs. returner flows.
+**How**: `ROW_NUMBER()` logic in CASE.
+
+---
+
+### 17. Running average revenue per customer
+```sql
+WITH DailyRevenue AS (
+    SELECT o.CustomerId, o.OrderDate, SUM(oi.Quantity * oi.PriceAtPurchase) AS DailyTotal
+    FROM Orders o
+    JOIN OrderItems oi ON o.OrderId = oi.OrderId
+    GROUP BY o.CustomerId, o.OrderDate
+)
+SELECT *,
+       AVG(DailyTotal) OVER (PARTITION BY CustomerId ORDER BY OrderDate ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) AS RunningAvg
+FROM DailyRevenue;
+```
+**What**: See how average spend evolves.
+**Why**: Track customer trend over time.
+**How**: Moving average window.
+
+---
+
+### 18. Show revenue for last 3 orders only
+```sql
+SELECT *
+FROM (
+    SELECT o.OrderId, o.CustomerId, o.OrderDate,
+           SUM(oi.Quantity * oi.PriceAtPurchase) AS Revenue,
+           ROW_NUMBER() OVER (PARTITION BY o.CustomerId ORDER BY o.OrderDate DESC) AS rn
+    FROM Orders o
+    JOIN OrderItems oi ON o.OrderId = oi.OrderId
+    GROUP BY o.OrderId, o.CustomerId, o.OrderDate
+) AS Recent
+WHERE rn <= 3;
+```
+**What**: Limits to most recent 3.
+**Why**: Trend snapshots.
+**How**: `ROW_NUMBER()` usage.
+
+---
+
+### 19. Show revenue rank per category per day
+```sql
+WITH DailyCategorySales AS (
+    SELECT FORMAT(OrderDate, 'yyyy-MM-dd') AS SalesDate,
+           c.CategoryId,
+           SUM(oi.Quantity * oi.PriceAtPurchase) AS Revenue
+    FROM Orders o
+    JOIN OrderItems oi ON o.OrderId = oi.OrderId
+    JOIN ProductVariants v ON oi.VariantId = v.VariantId
+    JOIN Products p ON v.ProductId = p.ProductId
+    JOIN Categories c ON p.CategoryId = c.CategoryId
+    GROUP BY FORMAT(OrderDate, 'yyyy-MM-dd'), c.CategoryId
+)
+SELECT *,
+       RANK() OVER (PARTITION BY SalesDate ORDER BY Revenue DESC) AS DailyRank
+FROM DailyCategorySales;
+```
+**What**: Leaderboard of top product categories.
+**Why**: Measure category performance.
+**How**: Partition by SalesDate.
+
+---
+
+### 20. Count days since first purchase for each order
+```sql
+SELECT OrderId, CustomerId, OrderDate,
+       DATEDIFF(DAY, MIN(OrderDate) OVER (PARTITION BY CustomerId), OrderDate) AS DaysSinceFirstOrder
+FROM Orders;
+```
+**What**: Time into customer lifecycle.
+**Why**: Segmentation.
+**How**: `MIN(...) OVER`.
+
+---
+
+### 21. Percentile rank of customers based on revenue
+```sql
+WITH CustomerSpend AS (
+    SELECT CustomerId, SUM(oi.Quantity * oi.PriceAtPurchase) AS Revenue
+    FROM Orders o
+    JOIN OrderItems oi ON o.OrderId = oi.OrderId
+    GROUP BY CustomerId
+)
+SELECT *,
+       PERCENT_RANK() OVER (ORDER BY Revenue DESC) AS SpendPercentile
+FROM CustomerSpend;
+```
+**What**: Rank normalized to 0–1 scale.
+**Why**: For percentile-based targeting.
+**How**: `PERCENT_RANK()`.
+
+---
+
+### 22. Rank orders within each region by revenue
+```sql
+WITH OrderRevenue AS (
+    SELECT o.OrderId, c.Region,
+           SUM(oi.Quantity * oi.PriceAtPurchase) AS Revenue
+    FROM Orders o
+    JOIN Customers c ON o.CustomerId = c.CustomerId
+    JOIN OrderItems oi ON o.OrderId = oi.OrderId
+    GROUP BY o.OrderId, c.Region
+)
+SELECT *,
+       RANK() OVER (PARTITION BY Region ORDER BY Revenue DESC) AS RankInRegion
+FROM OrderRevenue;
+```
+**What**: Localized top orders.
+**Why**: Regional leaderboards.
+**How**: `PARTITION BY Region`.
+
+---
+
+### 23. Cumulative order count per customer
+```sql
+SELECT CustomerId, OrderDate,
+       COUNT(*) OVER (PARTITION BY CustomerId ORDER BY OrderDate ROWS UNBOUNDED PRECEDING) AS CumulativeOrders
+FROM Orders;
+```
+**What**: Tracks total order history over time.
+**Why**: Power churn dashboards.
+**How**: `ROWS UNBOUNDED PRECEDING`.
+
+---
+
+### 24. Compute average gap between orders per customer
+```sql
+WITH OrderGaps AS (
+    SELECT CustomerId, OrderDate,
+           DATEDIFF(DAY, LAG(OrderDate) OVER (PARTITION BY CustomerId ORDER BY OrderDate), OrderDate) AS Gap
+    FROM Orders
+)
+SELECT CustomerId, AVG(Gap * 1.0) AS AvgGap
+FROM OrderGaps
+WHERE Gap IS NOT NULL
+GROUP BY CustomerId;
+```
+**What**: Time between orders.
+**Why**: Churn or loyalty indicator.
+**How**: LAG() + aggregate.
+
+---
+
+### 25. Highlight orders significantly above customer average
+```sql
+WITH OrderWithAvg AS (
+    SELECT o.OrderId, o.CustomerId, o.OrderDate,
+           SUM(oi.Quantity * oi.PriceAtPurchase) AS OrderValue,
+           AVG(SUM(oi.Quantity * oi.PriceAtPurchase)) OVER (PARTITION BY o.CustomerId) AS AvgValue
+    FROM Orders o
+    JOIN OrderItems oi ON o.OrderId = oi.OrderId
+    GROUP BY o.OrderId, o.CustomerId, o.OrderDate
+)
+SELECT *
+FROM OrderWithAvg
+WHERE OrderValue > 1.5 * AvgValue;
+```
+**What**: Identify large spikes.
+**Why**: Upsell/cross-sell triggers.
+**How**: Compare current row to window average.
+
+---
+
 
 
 
