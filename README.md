@@ -1391,6 +1391,138 @@ EXEC sp_helprolemember 'ReportingReaders';
 
 ---
 
+### 🏰 Stage 12: Logging, Auditing & Soft Deletes
+
+#### 🔬 Concepts Introduced:
+- **Soft Deletes**: Flag records instead of deleting (logical deletion)
+- **Audit Trails**: Log who, what, and when of data changes
+- **Change Tracking**: Lightweight row-change system
+- **Temporal Tables**: Automatically keep data history
+- **CDC (Change Data Capture)**: Advanced row-level change capture
+
+---
+
+#### 💼 Objectives:
+- Track changes without losing historical data
+- Provide full traceability of user actions
+- Implement safe deletes with restore capability
+
+---
+
+### ❌ Soft Delete Implementation
+
+```sql
+-- 1. Add IsDeleted column to the table
+ALTER TABLE Products ADD IsDeleted BIT DEFAULT 0;
+
+-- 2. Replace DELETE with UPDATE
+UPDATE Products
+SET IsDeleted = 1
+WHERE ProductId = 101;
+
+-- 3. Filter out deleted products in all queries
+SELECT *
+FROM Products
+WHERE IsDeleted = 0;
+
+-- 4. Optionally, create a view for active records
+CREATE VIEW vw_Products_Active AS
+SELECT * FROM Products WHERE IsDeleted = 0;
+```
+
+---
+
+### 🌐 Audit Log Table Example
+
+```sql
+-- 1. Create audit table
+CREATE TABLE Audit_Orders (
+    AuditId INT IDENTITY(1,1),
+    OrderId INT,
+    ActionType VARCHAR(10),
+    PerformedBy NVARCHAR(100),
+    PerformedOn DATETIME DEFAULT GETDATE(),
+    OldStatus NVARCHAR(50),
+    NewStatus NVARCHAR(50)
+);
+
+-- 2. Create trigger to track status changes
+CREATE TRIGGER trg_AuditOrderStatus
+ON Orders
+AFTER UPDATE
+AS
+BEGIN
+    INSERT INTO Audit_Orders (OrderId, ActionType, PerformedBy, OldStatus, NewStatus)
+    SELECT d.OrderId, 'UPDATE', SYSTEM_USER, d.Status, i.Status
+    FROM deleted d
+    JOIN inserted i ON d.OrderId = i.OrderId
+    WHERE d.Status <> i.Status;
+END;
+```
+
+---
+
+### 🔮 Temporal Tables (System-Versioned History)
+
+```sql
+-- 1. Add system versioning
+CREATE TABLE Customers_History
+(
+    CustomerId INT PRIMARY KEY,
+    FullName NVARCHAR(100),
+    Email NVARCHAR(100),
+    ValidFrom DATETIME2 GENERATED ALWAYS AS ROW START,
+    ValidTo DATETIME2 GENERATED ALWAYS AS ROW END,
+    PERIOD FOR SYSTEM_TIME (ValidFrom, ValidTo)
+)
+WITH (SYSTEM_VERSIONING = ON);
+```
+
+```sql
+-- 2. Query past state (e.g., how it looked last month)
+SELECT * FROM Customers_History
+FOR SYSTEM_TIME AS OF '2024-02-15T00:00:00';
+```
+
+---
+
+### 🤖 Change Tracking
+
+```sql
+-- 1. Enable change tracking at database level
+ALTER DATABASE EcommerceDB
+SET CHANGE_TRACKING = ON
+(CHANGE_RETENTION = 7 DAYS, AUTO_CLEANUP = ON);
+
+-- 2. Enable for specific tables
+ALTER TABLE Orders
+ENABLE CHANGE_TRACKING
+WITH (TRACK_COLUMNS_UPDATED = ON);
+
+-- 3. Query changed rows since last sync
+SELECT *
+FROM CHANGETABLE(CHANGES Orders, 101) AS CT; -- 101 = last sync version
+```
+
+---
+
+### 🧵 Best Practices
+- Use **views** to hide deleted rows
+- Log changes using triggers or temporal tables
+- Consider **Change Tracking** for sync, **CDC** for full row change details
+- Always store `User`, `Action`, and `Timestamp` in audit logs
+- Encrypt or mask PII in audit records when needed
+
+---
+
+### ⚖️ Summary
+- **Soft Deletes**: Safer than physical delete; allows recovery
+- **Auditing**: Proves compliance and accountability
+- **System Versioning**: Built-in way to track full table history
+
+---
+
+
 
 
 
