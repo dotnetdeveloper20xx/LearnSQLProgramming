@@ -3685,4 +3685,432 @@ ON vw_StockAvailability (VariantId);
 
 ---
 
+# ✅ Stage 6: Advanced Reporting, PIVOT, and Dashboard Views – Analytical SQL
+
+This stage focuses on:
+- ✅ PIVOT / UNPIVOT
+- ✅ Advanced reports and KPIs
+- ✅ Temporal trends and snapshot reporting
+- ✅ Visual-ready dashboard data
+
+Each question includes:
+- Clear use case
+- What/Why/How format
+- Full SQL code with best practices
+
+---
+
+### 1. PIVOT: Sales quantity by product per month
+```sql
+SELECT * FROM (
+    SELECT FORMAT(OrderDate, 'yyyy-MM') AS OrderMonth,
+           p.ProductName,
+           oi.Quantity
+    FROM OrderItems oi
+    JOIN ProductVariants v ON oi.VariantId = v.VariantId
+    JOIN Products p ON v.ProductId = p.ProductId
+    JOIN Orders o ON oi.OrderId = o.OrderId
+) AS SourceTable
+PIVOT (
+    SUM(Quantity) FOR ProductName IN ([Shoes], [Bags], [Shirts])
+) AS PivotTable;
+```
+**What**: Show monthly sales in columns.
+**Why**: User-friendly dashboard layout.
+**How**: Use PIVOT to turn rows into columns.
+
+---
+
+### 2. UNPIVOT: Flatten inventory status
+```sql
+SELECT VariantId, StockType, Quantity
+FROM (
+  SELECT VariantId, QuantityAvailable, QuantityReserved
+  FROM Inventory
+) AS Inv
+UNPIVOT (
+  Quantity FOR StockType IN (QuantityAvailable, QuantityReserved)
+) AS FlatStock;
+```
+**What**: Normalize wide stock table.
+**Why**: Simpler aggregation.
+**How**: Use UNPIVOT.
+
+---
+
+### 3. KPI: Total orders, revenue, average order value
+```sql
+SELECT
+    COUNT(DISTINCT o.OrderId) AS TotalOrders,
+    SUM(oi.Quantity * oi.PriceAtPurchase) AS TotalRevenue,
+    AVG(oi.Quantity * oi.PriceAtPurchase) AS AvgOrderValue
+FROM Orders o
+JOIN OrderItems oi ON o.OrderId = oi.OrderId;
+```
+**What**: Executive summary.
+**Why**: Core dashboard metrics.
+**How**: Aggregates.
+
+---
+
+### 4. KPI: Daily revenue trend (last 7 days)
+```sql
+SELECT CAST(OrderDate AS DATE) AS Day,
+       SUM(oi.Quantity * oi.PriceAtPurchase) AS Revenue
+FROM Orders o
+JOIN OrderItems oi ON o.OrderId = oi.OrderId
+WHERE OrderDate >= DATEADD(DAY, -7, GETDATE())
+GROUP BY CAST(OrderDate AS DATE)
+ORDER BY Day;
+```
+**What**: 7-day trend line.
+**Why**: Performance monitoring.
+**How**: GROUP BY day.
+
+---
+
+### 5. Top-selling products per month
+```sql
+WITH MonthlyProductSales AS (
+    SELECT FORMAT(o.OrderDate, 'yyyy-MM') AS Month,
+           p.ProductName,
+           SUM(oi.Quantity) AS TotalSold
+    FROM OrderItems oi
+    JOIN ProductVariants v ON oi.VariantId = v.VariantId
+    JOIN Products p ON v.ProductId = p.ProductId
+    JOIN Orders o ON oi.OrderId = o.OrderId
+    GROUP BY FORMAT(o.OrderDate, 'yyyy-MM'), p.ProductName
+)
+SELECT * FROM (
+    SELECT *, RANK() OVER (PARTITION BY Month ORDER BY TotalSold DESC) AS rn
+    FROM MonthlyProductSales
+) Ranked
+WHERE rn <= 1;
+```
+**What**: Bestsellers by month.
+**Why**: Trend visibility.
+**How**: RANK() + filter.
+
+---
+
+### 6. Hourly revenue summary for the last 24 hours
+```sql
+SELECT DATEPART(HOUR, OrderDate) AS OrderHour,
+       SUM(oi.Quantity * oi.PriceAtPurchase) AS Revenue
+FROM Orders o
+JOIN OrderItems oi ON o.OrderId = oi.OrderId
+WHERE OrderDate >= DATEADD(HOUR, -24, GETDATE())
+GROUP BY DATEPART(HOUR, OrderDate)
+ORDER BY OrderHour;
+```
+**What**: Hourly view.
+**Why**: Detect sales peaks.
+**How**: GROUP BY hour.
+
+---
+
+### 7. Weekly refund trend
+```sql
+SELECT DATEPART(WEEK, RefundDate) AS RefundWeek,
+       SUM(RefundAmount) AS TotalRefunded
+FROM Refunds
+GROUP BY DATEPART(WEEK, RefundDate)
+ORDER BY RefundWeek;
+```
+**What**: Refund patterns.
+**Why**: Quality control.
+**How**: GROUP BY week.
+
+---
+
+### 8. Order counts by weekday
+```sql
+SELECT DATENAME(WEEKDAY, OrderDate) AS DayName,
+       COUNT(*) AS Orders
+FROM Orders
+GROUP BY DATENAME(WEEKDAY, OrderDate);
+```
+**What**: Popular days.
+**Why**: Staffing/ads.
+**How**: Day grouping.
+
+---
+
+### 9. Pivot by payment method monthly
+```sql
+SELECT * FROM (
+    SELECT FORMAT(PaymentDate, 'yyyy-MM') AS PayMonth, PaymentMethod, Amount
+    FROM Payments
+) AS SourceTable
+PIVOT (
+    SUM(Amount) FOR PaymentMethod IN ([CreditCard], [PayPal], [Stripe])
+) AS PivotPay;
+```
+**What**: Payment spread.
+**Why**: Channel performance.
+**How**: PIVOT revenue.
+
+---
+
+### 10. Orders by region (geographic breakdown)
+```sql
+SELECT Region, COUNT(*) AS Orders
+FROM Customers c
+JOIN Orders o ON c.CustomerId = o.CustomerId
+GROUP BY Region;
+```
+**What**: Regional performance.
+**Why**: Targeting.
+**How**: JOIN + GROUP.
+
+---
+
+### 11. Revenue vs Refunds by month
+```sql
+WITH MonthlyData AS (
+  SELECT FORMAT(OrderDate, 'yyyy-MM') AS Month,
+         SUM(oi.Quantity * oi.PriceAtPurchase) AS Sales
+  FROM Orders o
+  JOIN OrderItems oi ON o.OrderId = oi.OrderId
+  GROUP BY FORMAT(OrderDate, 'yyyy-MM')
+), RefundsData AS (
+  SELECT FORMAT(RefundDate, 'yyyy-MM') AS Month,
+         SUM(RefundAmount) AS Refunds
+  FROM Refunds
+  GROUP BY FORMAT(RefundDate, 'yyyy-MM')
+)
+SELECT m.Month, Sales, ISNULL(r.Refunds, 0) AS Refunds
+FROM MonthlyData m
+LEFT JOIN RefundsData r ON m.Month = r.Month;
+```
+**What**: Profit margin view.
+**Why**: Net KPI.
+**How**: CTEs + JOIN.
+
+---
+
+### 12. Weekly growth rate
+```sql
+WITH WeeklyRevenue AS (
+    SELECT DATEPART(WEEK, OrderDate) AS WeekNum,
+           SUM(oi.Quantity * oi.PriceAtPurchase) AS Revenue
+    FROM Orders o
+    JOIN OrderItems oi ON o.OrderId = oi.OrderId
+    GROUP BY DATEPART(WEEK, OrderDate)
+)
+SELECT WeekNum,
+       Revenue,
+       LAG(Revenue) OVER (ORDER BY WeekNum) AS LastWeek,
+       (Revenue - LAG(Revenue) OVER (ORDER BY WeekNum)) * 100.0 / NULLIF(LAG(Revenue) OVER (ORDER BY WeekNum), 0) AS GrowthRate
+FROM WeeklyRevenue;
+```
+**What**: Performance growth.
+**Why**: Health check.
+**How**: LAG() comparison.
+
+---
+
+### 13. Refunds by reason code (pivot)
+```sql
+SELECT * FROM (
+  SELECT RefundReason, FORMAT(RefundDate, 'yyyy-MM') AS Month, RefundAmount
+  FROM Refunds
+) AS Source
+PIVOT (
+  SUM(RefundAmount) FOR RefundReason IN ([Damaged], [WrongSize], [Late])
+) AS PivotReasons;
+```
+**What**: Root cause analysis.
+**Why**: Ops optimization.
+**How**: PIVOT on reasons.
+
+---
+
+### 14. Daily new customers
+```sql
+SELECT CAST(CreatedAt AS DATE) AS JoinDate, COUNT(*) AS NewCustomers
+FROM Customers
+GROUP BY CAST(CreatedAt AS DATE);
+```
+**What**: Growth tracking.
+**Why**: Marketing funnel.
+**How**: Signup date group.
+
+---
+
+### 15. Customer churn: last active month
+```sql
+SELECT CustomerId, MAX(FORMAT(OrderDate, 'yyyy-MM')) AS LastMonthActive
+FROM Orders
+GROUP BY CustomerId;
+```
+**What**: Churn detection.
+**Why**: Retention focus.
+**How**: MAX date group.
+
+---
+
+### 16. Orders by time of day buckets
+```sql
+SELECT
+  CASE
+    WHEN DATEPART(HOUR, OrderDate) BETWEEN 0 AND 5 THEN 'Night'
+    WHEN DATEPART(HOUR, OrderDate) BETWEEN 6 AND 11 THEN 'Morning'
+    WHEN DATEPART(HOUR, OrderDate) BETWEEN 12 AND 17 THEN 'Afternoon'
+    ELSE 'Evening'
+  END AS TimeBlock,
+  COUNT(*) AS Orders
+FROM Orders
+GROUP BY
+  CASE
+    WHEN DATEPART(HOUR, OrderDate) BETWEEN 0 AND 5 THEN 'Night'
+    WHEN DATEPART(HOUR, OrderDate) BETWEEN 6 AND 11 THEN 'Morning'
+    WHEN DATEPART(HOUR, OrderDate) BETWEEN 12 AND 17 THEN 'Afternoon'
+    ELSE 'Evening'
+  END;
+```
+**What**: Time segmentation.
+**Why**: Campaign timing.
+**How**: CASE blocks.
+
+---
+
+### 17. Conversion rate: visits vs orders
+```sql
+SELECT VisitDate, COUNT(DISTINCT VisitorId) AS Visitors,
+       (SELECT COUNT(*) FROM Orders WHERE CAST(OrderDate AS DATE) = VisitDate) AS Orders,
+       100.0 * (SELECT COUNT(*) FROM Orders WHERE CAST(OrderDate AS DATE) = VisitDate) / COUNT(DISTINCT VisitorId) AS ConversionRate
+FROM SiteVisits
+GROUP BY VisitDate;
+```
+**What**: Marketing ROI.
+**Why**: Optimize funnel.
+**How**: Dual source compare.
+
+---
+
+### 18. Products added vs sold by category
+```sql
+WITH Added AS (
+  SELECT CategoryId, COUNT(*) AS AddedCount FROM Products GROUP BY CategoryId
+), Sold AS (
+  SELECT p.CategoryId, COUNT(*) AS SoldCount
+  FROM OrderItems oi
+  JOIN ProductVariants v ON oi.VariantId = v.VariantId
+  JOIN Products p ON v.ProductId = p.ProductId
+  GROUP BY p.CategoryId
+)
+SELECT a.CategoryId, a.AddedCount, s.SoldCount
+FROM Added a
+LEFT JOIN Sold s ON a.CategoryId = s.CategoryId;
+```
+**What**: Inventory flow.
+**Why**: Lifecycle analysis.
+**How**: Dual CTE compare.
+
+---
+
+### 19. View peak revenue day of the month
+```sql
+SELECT TOP 1 CAST(OrderDate AS DATE) AS PeakDay, SUM(oi.Quantity * oi.PriceAtPurchase) AS DailyRevenue
+FROM Orders o
+JOIN OrderItems oi ON o.OrderId = oi.OrderId
+GROUP BY CAST(OrderDate AS DATE)
+ORDER BY DailyRevenue DESC;
+```
+**What**: Identify spikes.
+**Why**: Event success.
+**How**: ORDER BY sum.
+
+---
+
+### 20. Order heatmap: day vs hour
+```sql
+SELECT DATENAME(WEEKDAY, OrderDate) AS DayOfWeek,
+       DATEPART(HOUR, OrderDate) AS Hour,
+       COUNT(*) AS Orders
+FROM Orders
+GROUP BY DATENAME(WEEKDAY, OrderDate), DATEPART(HOUR, OrderDate);
+```
+**What**: Temporal density.
+**Why**: Staffing/timing.
+**How**: 2D group.
+
+---
+
+### 21. Product review trend
+```sql
+SELECT FORMAT(ReviewDate, 'yyyy-MM') AS Month,
+       AVG(Rating) AS AvgRating, COUNT(*) AS TotalReviews
+FROM ProductRatings
+GROUP BY FORMAT(ReviewDate, 'yyyy-MM');
+```
+**What**: Quality trend.
+**Why**: Product feedback.
+**How**: Time avg.
+
+---
+
+### 22. Cart abandonment rate by day
+```sql
+SELECT CAST(CartCreatedAt AS DATE) AS Day,
+       COUNT(*) AS Carts,
+       SUM(CASE WHEN IsCheckedOut = 0 THEN 1 ELSE 0 END) AS Abandoned,
+       100.0 * SUM(CASE WHEN IsCheckedOut = 0 THEN 1 ELSE 0 END) / COUNT(*) AS AbandonRate
+FROM Carts
+GROUP BY CAST(CartCreatedAt AS DATE);
+```
+**What**: Conversion loss.
+**Why**: Optimize checkout.
+**How**: Ratio logic.
+
+---
+
+### 23. Monthly active users (orders)
+```sql
+SELECT FORMAT(OrderDate, 'yyyy-MM') AS Month, COUNT(DISTINCT CustomerId) AS ActiveUsers
+FROM Orders
+GROUP BY FORMAT(OrderDate, 'yyyy-MM');
+```
+**What**: Activity measurement.
+**Why**: Growth metric.
+**How**: Distinct count.
+
+---
+
+### 24. Forecast next month sales (moving avg)
+```sql
+WITH MonthlyRevenue AS (
+    SELECT FORMAT(OrderDate, 'yyyy-MM') AS Month,
+           SUM(oi.Quantity * oi.PriceAtPurchase) AS Revenue
+    FROM Orders o
+    JOIN OrderItems oi ON o.OrderId = oi.OrderId
+    GROUP BY FORMAT(OrderDate, 'yyyy-MM')
+)
+SELECT *,
+       AVG(Revenue) OVER (ORDER BY Month ROWS BETWEEN 2 PRECEDING AND CURRENT ROW) AS ForecastRevenue
+FROM MonthlyRevenue;
+```
+**What**: Simple forecast.
+**Why**: Planning.
+**How**: Moving window.
+
+---
+
+### 25. Revenue by campaign tag (UNPIVOTed from wide table)
+```sql
+SELECT CampaignType, Revenue
+FROM (
+  SELECT EmailRevenue, SocialRevenue, AdsRevenue
+) AS CampaignData
+UNPIVOT (
+  Revenue FOR CampaignType IN (EmailRevenue, SocialRevenue, AdsRevenue)
+) AS FlatCampaign;
+```
+**What**: Campaign ROI.
+**Why**: Channel budget.
+**How**: UNPIVOT to normalize.
+
+---
+
 
