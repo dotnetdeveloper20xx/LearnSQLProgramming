@@ -899,6 +899,78 @@ ORDER BY Year DESC, Week DESC;
 
 ---
 
+### 🚚 Stage 8: Deliveries & Payment Modules
+
+#### 🔬 Skills Covered:
+- Complex joins with shipments and payments
+- Status tracking (Delivered, Delayed, Refunded)
+- Nested queries for refund verification
+- Transaction and refund reporting
+- Delivery failure analysis
+
+#### 💼 Objectives:
+- Track order delivery from dispatch to delivery
+- Monitor payment statuses and refund processes
+- Analyze logistics and payment efficiency
+
+#### 🔍 Schema Elements Introduced:
+- `Shipments`: ShipmentId, OrderId, CarrierId, ShipmentDate, DeliveryDate, Status
+- `Carriers`: CarrierId, Name, ContactInfo
+- `Payments`: PaymentId, OrderId, Amount, PaymentMethod, Status, PaidOn
+- `Refunds`: RefundId, PaymentId, Reason, Amount, RefundedOn
+
+#### 🌐 Example Queries:
+
+```sql
+-- Join Orders with shipment status
+SELECT 
+    o.OrderId, o.OrderDate, s.ShipmentDate, s.DeliveryDate, s.Status AS ShipmentStatus
+FROM Orders o
+LEFT JOIN Shipments s ON o.OrderId = s.OrderId;
+
+-- Orders delivered more than 10 days after shipment
+SELECT 
+    o.OrderId, s.ShipmentDate, s.DeliveryDate,
+    DATEDIFF(DAY, s.ShipmentDate, s.DeliveryDate) AS DeliveryDelay
+FROM Orders o
+JOIN Shipments s ON o.OrderId = s.OrderId
+WHERE DATEDIFF(DAY, s.ShipmentDate, s.DeliveryDate) > 10;
+
+-- Total refunds issued per customer
+SELECT 
+    c.FullName,
+    SUM(r.Amount) AS TotalRefunded
+FROM Refunds r
+JOIN Payments p ON r.PaymentId = p.PaymentId
+JOIN Orders o ON p.OrderId = o.OrderId
+JOIN Customers c ON o.CustomerId = c.CustomerId
+GROUP BY c.FullName;
+
+-- Refund ratio per carrier
+SELECT 
+    cr.Name AS Carrier,
+    COUNT(DISTINCT r.RefundId) * 1.0 / COUNT(DISTINCT s.ShipmentId) AS RefundRate
+FROM Shipments s
+JOIN Carriers cr ON s.CarrierId = cr.CarrierId
+JOIN Orders o ON s.OrderId = o.OrderId
+JOIN Payments p ON o.OrderId = p.OrderId
+LEFT JOIN Refunds r ON p.PaymentId = r.PaymentId
+GROUP BY cr.Name;
+
+-- Payment status summary
+SELECT Status, COUNT(*) AS Count
+FROM Payments
+GROUP BY Status;
+```
+
+#### 🧵 What, Why, How
+- **What**: These modules track physical and financial fulfillment.
+- **Why**: Delivery delays and refund trends help optimize logistics and customer satisfaction.
+- **How**: Use joins across orders, shipments, carriers, and payments; apply conditions and aggregations to build operational KPIs.
+
+---
+
+
 
 
 
