@@ -2821,4 +2821,478 @@ SELECT * FROM TreeDepth ORDER BY Depth;
 
 ---
 
+# ✅ Stage 4: Stored Procedures, Triggers & Functions – SQL Logic and Automation
+
+In this stage, we cover:
+- ✅ Stored Procedures
+- ✅ User-Defined Functions (Scalar & Table-Valued)
+- ✅ Triggers (AFTER/INSTEAD OF)
+
+Each of the 25 questions includes:
+- Practical use case
+- What, Why, and How explanation
+- Full SQL with commentary
+
+---
+
+### 1. Create a stored procedure to insert a new customer
+```sql
+CREATE PROCEDURE AddCustomer
+    @FullName NVARCHAR(100),
+    @Email NVARCHAR(100)
+AS
+BEGIN
+    INSERT INTO Customers (FullName, Email)
+    VALUES (@FullName, @Email);
+END;
+```
+**What**: Insert procedure.
+**Why**: Encapsulates logic.
+**How**: Parameters passed into insert.
+
+---
+
+### 2. Create a scalar function to calculate discount
+```sql
+CREATE FUNCTION fn_GetDiscount (@Total DECIMAL(10,2))
+RETURNS DECIMAL(10,2)
+AS
+BEGIN
+    RETURN CASE 
+        WHEN @Total > 100 THEN @Total * 0.10
+        ELSE 0
+    END;
+END;
+```
+**What**: Function returns a discount value.
+**Why**: Used in invoices.
+**How**: Conditional logic with RETURN.
+
+---
+
+### 3. Create AFTER INSERT trigger to log order creation
+```sql
+CREATE TRIGGER trg_LogOrderInsert
+ON Orders
+AFTER INSERT
+AS
+BEGIN
+    INSERT INTO SystemLogs (ActionType, EntityName, EntityId, Timestamp)
+    SELECT 'INSERT', 'Orders', OrderId, GETDATE()
+    FROM inserted;
+END;
+```
+**What**: Logs order creation.
+**Why**: Tracks inserts for audits.
+**How**: Uses inserted pseudo-table.
+
+---
+
+### 4. Function to calculate order total
+```sql
+CREATE FUNCTION fn_GetOrderTotal (@OrderId INT)
+RETURNS DECIMAL(10,2)
+AS
+BEGIN
+    DECLARE @Total DECIMAL(10,2);
+    SELECT @Total = SUM(Quantity * PriceAtPurchase)
+    FROM OrderItems WHERE OrderId = @OrderId;
+    RETURN @Total;
+END;
+```
+**What**: Order total calculator.
+**Why**: Reusable for reports.
+**How**: Aggregate with variable.
+
+---
+
+### 5. INSTEAD OF DELETE trigger for soft deletes
+```sql
+CREATE TRIGGER trg_SoftDeleteProduct
+ON Products
+INSTEAD OF DELETE
+AS
+BEGIN
+    UPDATE Products
+    SET IsDeleted = 1
+    WHERE ProductId IN (SELECT ProductId FROM deleted);
+END;
+```
+**What**: Prevents physical delete.
+**Why**: Enables undo/delete recovery.
+**How**: Converts DELETE into UPDATE.
+
+---
+
+### 6. Create a stored procedure to update order status
+```sql
+CREATE PROCEDURE UpdateOrderStatus
+    @OrderId INT,
+    @NewStatus NVARCHAR(50)
+AS
+BEGIN
+    UPDATE Orders
+    SET Status = @NewStatus, UpdatedAt = GETDATE()
+    WHERE OrderId = @OrderId;
+END;
+```
+**What**: Updates order status.
+**Why**: Controlled updates.
+**How**: Parameter-driven update.
+
+---
+
+### 7. Table-valued function for top N customers
+```sql
+CREATE FUNCTION fn_TopCustomers (@N INT)
+RETURNS TABLE
+AS
+RETURN (
+    SELECT TOP (@N) CustomerId, SUM(oi.Quantity * oi.PriceAtPurchase) AS TotalSpent
+    FROM Orders o
+    JOIN OrderItems oi ON o.OrderId = oi.OrderId
+    GROUP BY CustomerId
+    ORDER BY TotalSpent DESC
+);
+```
+**What**: Returns top spenders.
+**Why**: Leaderboards.
+**How**: TVF using table RETURN.
+
+---
+
+### 8. Trigger to update inventory on order item insert
+```sql
+CREATE TRIGGER trg_UpdateInventory
+ON OrderItems
+AFTER INSERT
+AS
+BEGIN
+    UPDATE Inventory
+    SET QuantityAvailable = QuantityAvailable - i.Quantity
+    FROM Inventory inv
+    JOIN inserted i ON inv.VariantId = i.VariantId;
+END;
+```
+**What**: Auto-adjusts inventory.
+**Why**: Real-time tracking.
+**How**: INSERT trigger updates Inventory.
+
+---
+
+### 9. Stored procedure for paginated product list
+```sql
+CREATE PROCEDURE GetProductsPaged
+    @Page INT,
+    @PageSize INT
+AS
+BEGIN
+    DECLARE @Offset INT = (@Page - 1) * @PageSize;
+
+    SELECT *
+    FROM Products
+    ORDER BY ProductName
+    OFFSET @Offset ROWS FETCH NEXT @PageSize ROWS ONLY;
+END;
+```
+**What**: Retrieves paginated product list.
+**Why**: UI/API pagination.
+**How**: OFFSET FETCH inside SP.
+
+---
+
+### 10. Scalar function to compute tax
+```sql
+CREATE FUNCTION fn_ComputeTax (@Amount DECIMAL(10,2))
+RETURNS DECIMAL(10,2)
+AS
+BEGIN
+    RETURN @Amount * 0.15;
+END;
+```
+**What**: Calculates tax.
+**Why**: Standard in e-commerce.
+**How**: Simple multiplier function.
+
+---
+
+### 11. Stored procedure to apply bulk discount
+```sql
+CREATE PROCEDURE ApplyBulkDiscount
+    @CategoryId INT, @DiscountRate DECIMAL(5,2)
+AS
+BEGIN
+    UPDATE Products
+    SET Price = Price * (1 - @DiscountRate)
+    WHERE CategoryId = @CategoryId;
+END;
+```
+**What**: Bulk price update.
+**Why**: Promotions.
+**How**: Category-based UPDATE.
+
+---
+
+### 12. Trigger to prevent deleting active customers
+```sql
+CREATE TRIGGER trg_PreventCustomerDelete
+ON Customers
+INSTEAD OF DELETE
+AS
+BEGIN
+    IF EXISTS (
+        SELECT 1 FROM Orders o
+        JOIN deleted d ON o.CustomerId = d.CustomerId
+    )
+    BEGIN
+        RAISERROR('Cannot delete customers with orders', 16, 1);
+        ROLLBACK;
+    END
+    ELSE
+    BEGIN
+        DELETE FROM Customers WHERE CustomerId IN (SELECT CustomerId FROM deleted);
+    END
+END;
+```
+**What**: Safeguard for deletion.
+**Why**: Preserve order integrity.
+**How**: Conditional check in trigger.
+
+---
+
+### 13. TVF for products below inventory threshold
+```sql
+CREATE FUNCTION fn_LowStockProducts (@Threshold INT)
+RETURNS TABLE
+AS
+RETURN (
+    SELECT VariantId, QuantityAvailable
+    FROM Inventory
+    WHERE QuantityAvailable < @Threshold
+);
+```
+**What**: Low stock list.
+**Why**: Alerting systems.
+**How**: Table-returning filter.
+
+---
+
+### 14. Scalar function for estimated delivery
+```sql
+CREATE FUNCTION fn_EstimatedDelivery (@Days INT)
+RETURNS DATE
+AS
+BEGIN
+    RETURN DATEADD(DAY, @Days, GETDATE());
+END;
+```
+**What**: Adds days to today.
+**Why**: Show expected dates.
+**How**: DATEADD logic.
+
+---
+
+### 15. Trigger to audit price changes
+```sql
+CREATE TRIGGER trg_AuditPriceChange
+ON Products
+AFTER UPDATE
+AS
+BEGIN
+    INSERT INTO PriceChangeLog (ProductId, OldPrice, NewPrice, ChangedAt)
+    SELECT d.ProductId, d.Price, i.Price, GETDATE()
+    FROM deleted d
+    JOIN inserted i ON d.ProductId = i.ProductId
+    WHERE d.Price <> i.Price;
+END;
+```
+**What**: Tracks price updates.
+**Why**: For audit/compliance.
+**How**: Compare inserted/deleted.
+
+---
+
+### 16. Stored procedure to cancel an order
+```sql
+CREATE PROCEDURE CancelOrder
+    @OrderId INT
+AS
+BEGIN
+    UPDATE Orders
+    SET Status = 'Cancelled'
+    WHERE OrderId = @OrderId;
+
+    DELETE FROM OrderItems WHERE OrderId = @OrderId;
+END;
+```
+**What**: Full cancellation.
+**Why**: Order management.
+**How**: Two-step transaction.
+
+---
+
+### 17. Scalar function for full customer name
+```sql
+CREATE FUNCTION fn_FullName (@First NVARCHAR(50), @Last NVARCHAR(50))
+RETURNS NVARCHAR(101)
+AS
+BEGIN
+    RETURN @First + ' ' + @Last;
+END;
+```
+**What**: Combines names.
+**Why**: Clean display.
+**How**: String concat.
+
+---
+
+### 18. Trigger to log failed logins
+```sql
+-- Hypothetical table for login events
+CREATE TRIGGER trg_LogFailedLogin
+ON FailedLoginEvents
+AFTER INSERT
+AS
+BEGIN
+    INSERT INTO SystemLogs (ActionType, EntityName, EntityId, Timestamp)
+    SELECT 'LOGIN_FAIL', 'User', UserId, GETDATE()
+    FROM inserted;
+END;
+```
+**What**: Login failure tracking.
+**Why**: Security.
+**How**: Inserted audit.
+
+---
+
+### 19. Procedure to get total customers by region
+```sql
+CREATE PROCEDURE GetCustomerRegionTotals
+AS
+BEGIN
+    SELECT Region, COUNT(*) AS TotalCustomers
+    FROM Customers
+    GROUP BY Region;
+END;
+```
+**What**: Region breakdown.
+**Why**: Analytics.
+**How**: GROUP BY inside SP.
+
+---
+
+### 20. Function to get last order date
+```sql
+CREATE FUNCTION fn_LastOrderDate (@CustomerId INT)
+RETURNS DATE
+AS
+BEGIN
+    RETURN (SELECT MAX(OrderDate) FROM Orders WHERE CustomerId = @CustomerId);
+END;
+```
+**What**: Last activity.
+**Why**: Re-engagement logic.
+**How**: MAX with filter.
+
+---
+
+### 21. Trigger to prevent negative inventory
+```sql
+CREATE TRIGGER trg_PreventNegativeInventory
+ON OrderItems
+AFTER INSERT
+AS
+BEGIN
+    IF EXISTS (
+        SELECT 1 FROM inserted i
+        JOIN Inventory inv ON i.VariantId = inv.VariantId
+        WHERE inv.QuantityAvailable - i.Quantity < 0
+    )
+    BEGIN
+        RAISERROR('Inventory cannot go below zero', 16, 1);
+        ROLLBACK;
+    END
+END;
+```
+**What**: Validation on insert.
+**Why**: Prevent overselling.
+**How**: Quantity check trigger.
+
+---
+
+### 22. Procedure to create daily sales snapshot
+```sql
+CREATE PROCEDURE SnapshotDailySales
+AS
+BEGIN
+    INSERT INTO SalesSnapshot (SnapshotDate, TotalRevenue)
+    SELECT CAST(GETDATE() AS DATE), SUM(oi.Quantity * oi.PriceAtPurchase)
+    FROM Orders o
+    JOIN OrderItems oi ON o.OrderId = oi.OrderId
+    WHERE CAST(OrderDate AS DATE) = CAST(GETDATE() AS DATE);
+END;
+```
+**What**: Daily snapshot.
+**Why**: Historical tracking.
+**How**: Aggregation + timestamp.
+
+---
+
+### 23. Scalar function to check if weekend
+```sql
+CREATE FUNCTION fn_IsWeekend (@Date DATE)
+RETURNS BIT
+AS
+BEGIN
+    RETURN CASE WHEN DATENAME(WEEKDAY, @Date) IN ('Saturday', 'Sunday') THEN 1 ELSE 0 END;
+END;
+```
+**What**: Weekend check.
+**Why**: Used in delivery SLA.
+**How**: DATENAME logic.
+
+---
+
+### 24. Trigger to enforce product naming rules
+```sql
+CREATE TRIGGER trg_ValidateProductName
+ON Products
+INSTEAD OF INSERT
+AS
+BEGIN
+    IF EXISTS (SELECT 1 FROM inserted WHERE LEN(ProductName) < 3)
+    BEGIN
+        RAISERROR('Product name too short', 16, 1);
+        ROLLBACK;
+    END
+    ELSE
+    BEGIN
+        INSERT INTO Products SELECT * FROM inserted;
+    END
+END;
+```
+**What**: Naming enforcement.
+**Why**: Clean data.
+**How**: Conditional insert.
+
+---
+
+### 25. Procedure to archive old orders
+```sql
+CREATE PROCEDURE ArchiveOldOrders
+    @CutoffDate DATE
+AS
+BEGIN
+    INSERT INTO ArchivedOrders
+    SELECT * FROM Orders WHERE OrderDate < @CutoffDate;
+
+    DELETE FROM Orders WHERE OrderDate < @CutoffDate;
+END;
+```
+**What**: Move old data.
+**Why**: Performance cleanup.
+**How**: Insert then delete.
+
+---
+
 
