@@ -647,6 +647,145 @@ OFFSET 0 ROWS FETCH NEXT 10 ROWS ONLY;  -- Top 10 sellers, page 1
 
 ---
 
+### ⚙️ Stage 6: Stored Procedures, Functions, Triggers
+
+#### 🔬 Skills Covered:
+- T-SQL procedural programming
+- Input/output parameters
+- Transactions and error handling
+- User-defined functions (scalar and table-valued)
+- DML Triggers (AFTER INSERT, UPDATE, DELETE)
+
+#### 💼 Objectives:
+- Encapsulate business logic using procedures
+- Automate data manipulation using triggers
+- Reuse logic through modular functions
+- Build detailed reports combining multiple SQL skills
+
+#### 🔍 Example Procedures, Functions, Triggers:
+
+```sql
+-- Stored Procedure: Place a new order (expanded with comments)
+CREATE PROCEDURE usp_PlaceOrder
+    @CustomerId INT,
+    @OrderItems OrderItemType READONLY, -- Table-Valued Parameter: Contains multiple order items
+    @NewOrderId INT OUTPUT               -- Output parameter to return the new OrderId
+AS
+BEGIN
+    SET NOCOUNT ON;
+    BEGIN TRY
+        BEGIN TRANSACTION; -- Start a transaction for atomicity
+
+        -- Insert new order into Orders table
+        INSERT INTO Orders (CustomerId, OrderDate, Status)
+        VALUES (@CustomerId, GETDATE(), 'Pending');
+
+        -- Capture the generated OrderId
+        SET @NewOrderId = SCOPE_IDENTITY();
+
+        -- Insert all order items from the TVP
+        INSERT INTO OrderItems (OrderId, VariantId, Quantity, PriceAtPurchase)
+        SELECT @NewOrderId, VariantId, Quantity, PriceAtPurchase
+        FROM @OrderItems;
+
+        COMMIT TRANSACTION; -- Commit only if all inserts succeed
+    END TRY
+    BEGIN CATCH
+        ROLLBACK TRANSACTION; -- Rollback on any failure
+        THROW; -- Re-throw the error for visibility
+    END CATCH
+END;
+
+-- Scalar Function: Calculate discount by tier
+CREATE FUNCTION fn_GetCustomerDiscount (@TotalAmount DECIMAL(10,2))
+RETURNS DECIMAL(5,2)
+AS
+BEGIN
+    DECLARE @DiscountRate DECIMAL(5,2);
+    IF @TotalAmount >= 1000 SET @DiscountRate = 0.10;
+    ELSE IF @TotalAmount >= 500 SET @DiscountRate = 0.05;
+    ELSE SET @DiscountRate = 0.00;
+    RETURN @DiscountRate;
+END;
+
+-- AFTER INSERT Trigger: Auto-update stock levels
+CREATE TRIGGER trg_UpdateStockAfterOrder
+ON OrderItems
+AFTER INSERT
+AS
+BEGIN
+    -- Reduce stock for each product variant in the order
+    UPDATE v
+    SET v.StockQuantity = v.StockQuantity - i.Quantity
+    FROM ProductVariants v
+    JOIN inserted i ON v.VariantId = i.VariantId;
+END;
+
+-- Trigger: Log user deletes to an audit table
+CREATE TRIGGER trg_LogDeletedUsers
+ON Customers
+AFTER DELETE
+AS
+BEGIN
+    INSERT INTO AuditDeletedCustomers (CustomerId, FullName, Email, DeletedAt)
+    SELECT CustomerId, FullName, Email, GETDATE()
+    FROM deleted;
+END;
+
+-- Inline Table-Valued Function: Return customer’s active orders
+CREATE FUNCTION fn_GetOpenOrders (@CustomerId INT)
+RETURNS TABLE
+AS
+RETURN (
+    SELECT OrderId, OrderDate, Status
+    FROM Orders
+    WHERE CustomerId = @CustomerId AND Status IN ('Pending', 'Processing')
+);
+```
+
+---
+
+#### 🔢 Advanced Reporting Using All Skills So Far
+
+```sql
+-- Generate a customer purchase report with:
+-- - Total orders
+-- - Total revenue
+-- - Average order value
+-- - Rank by revenue
+-- - Include only customers who made purchases in the last 90 days
+WITH CustomerOrderStats AS (
+    SELECT 
+        c.CustomerId,
+        c.FullName,
+        COUNT(DISTINCT o.OrderId) AS TotalOrders,
+        SUM(oi.PriceAtPurchase * oi.Quantity) AS TotalRevenue,
+        AVG(oi.PriceAtPurchase * oi.Quantity) AS AvgOrderValue
+    FROM Customers c
+    JOIN Orders o ON c.CustomerId = o.CustomerId
+    JOIN OrderItems oi ON o.OrderId = oi.OrderId
+    WHERE o.OrderDate >= DATEADD(DAY, -90, GETDATE())
+    GROUP BY c.CustomerId, c.FullName
+),
+RankedStats AS (
+    SELECT *,
+           RANK() OVER (ORDER BY TotalRevenue DESC) AS RevenueRank
+    FROM CustomerOrderStats
+)
+SELECT *
+FROM RankedStats
+WHERE TotalRevenue > 100; -- Filter low revenue accounts
+```
+
+#### 🧵 What, Why, How
+- **What**: Encapsulate logic (SPs), automate workflows (Triggers), reuse calculations (Functions), and produce strategic reports.
+- **Why**: Real-world systems require atomic operations, audit logs, and clean business logic separation.
+- **How**: Use transactions and error handling in SPs, triggers for auto-updates/logging, and modularize logic using UDFs and views.
+
+---
+
+
+
 
 
 
