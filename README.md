@@ -2393,6 +2393,186 @@ WHERE OrderValue > 1.5 * AvgValue;
 
 ---
 
+# ✅ Stage 3: CTEs, Recursion & Pagination – Advanced Data Structuring
+
+This stage explores Common Table Expressions (CTEs), recursive CTEs for hierarchies, and pagination techniques — essential for scalable applications and modular SQL.
+
+Each question includes:
+- ✅ The problem scenario
+- 💡 Why it matters in real systems
+- 🧠 Step-by-step SQL with explanations
+
+---
+
+### 1. Find top 5 most recent orders using a CTE
+```sql
+WITH RecentOrders AS (
+  SELECT * FROM Orders ORDER BY OrderDate DESC
+)
+SELECT TOP 5 * FROM RecentOrders;
+```
+**What**: Filters recent orders.
+**Why**: Often used for dashboard widgets.
+**How**: CTE simplifies chaining filters.
+
+---
+
+### 2. List products that have never been ordered
+```sql
+WITH UnorderedProducts AS (
+  SELECT p.ProductId, p.ProductName
+  FROM Products p
+  LEFT JOIN ProductVariants v ON p.ProductId = v.ProductId
+  LEFT JOIN OrderItems oi ON v.VariantId = oi.VariantId
+  WHERE oi.OrderItemId IS NULL
+)
+SELECT * FROM UnorderedProducts;
+```
+**What**: Inventory cleanup list.
+**Why**: Useful for marketing unpurchased products.
+**How**: LEFT JOIN + NULL filter inside CTE.
+
+---
+
+### 3. Build category hierarchy using recursion
+```sql
+WITH CategoryTree AS (
+  SELECT CategoryId, ParentCategoryId, CategoryName, 0 AS Level
+  FROM Categories
+  WHERE ParentCategoryId IS NULL
+
+  UNION ALL
+
+  SELECT c.CategoryId, c.ParentCategoryId, c.CategoryName, Level + 1
+  FROM Categories c
+  JOIN CategoryTree ct ON c.ParentCategoryId = ct.CategoryId
+)
+SELECT * FROM CategoryTree ORDER BY Level;
+```
+**What**: Parent-child tree traversal.
+**Why**: Visualize nested categories.
+**How**: Recursive self-join.
+
+---
+
+### 4. Flatten order summary into a single CTE pipeline
+```sql
+WITH OrderSummary AS (
+  SELECT o.OrderId, o.CustomerId, SUM(oi.Quantity * oi.PriceAtPurchase) AS TotalAmount
+  FROM Orders o
+  JOIN OrderItems oi ON o.OrderId = oi.OrderId
+  GROUP BY o.OrderId, o.CustomerId
+)
+SELECT * FROM OrderSummary WHERE TotalAmount > 100;
+```
+**What**: Filter high-value orders.
+**Why**: Used in loyalty and fraud detection.
+**How**: Aggregate inside CTE.
+
+---
+
+### 5. Paginate orders with OFFSET-FETCH
+```sql
+SELECT OrderId, OrderDate
+FROM Orders
+ORDER BY OrderDate DESC
+OFFSET 10 ROWS FETCH NEXT 10 ROWS ONLY;
+```
+**What**: Returns page 2 (rows 11–20).
+**Why**: Required for paging UIs.
+**How**: OFFSET/FETCH used with ORDER BY.
+
+---
+
+### 6. Retrieve full product breadcrumb path
+```sql
+WITH Breadcrumbs AS (
+  SELECT CategoryId, CategoryName, ParentCategoryId,
+         CAST(CategoryName AS VARCHAR(MAX)) AS Path
+  FROM Categories
+  WHERE ParentCategoryId IS NULL
+
+  UNION ALL
+
+  SELECT c.CategoryId, c.CategoryName, c.ParentCategoryId,
+         CAST(b.Path + ' > ' + c.CategoryName AS VARCHAR(MAX))
+  FROM Categories c
+  JOIN Breadcrumbs b ON c.ParentCategoryId = b.CategoryId
+)
+SELECT * FROM Breadcrumbs;
+```
+**What**: Builds readable paths.
+**Why**: Used in site navigation.
+**How**: Recursive concat string path.
+
+---
+
+### 7. Paginate customers ordered by signup date
+```sql
+SELECT CustomerId, FullName, CreatedAt
+FROM Customers
+ORDER BY CreatedAt
+OFFSET 0 ROWS FETCH NEXT 25 ROWS ONLY;
+```
+**What**: First 25 customers.
+**Why**: Used in CRM and data export.
+**How**: OFFSET-FETCH with sort.
+
+---
+
+### 8. Find all descendants of a specific category
+```sql
+WITH Descendants AS (
+  SELECT CategoryId FROM Categories WHERE CategoryId = 5
+
+  UNION ALL
+
+  SELECT c.CategoryId
+  FROM Categories c
+  JOIN Descendants d ON c.ParentCategoryId = d.CategoryId
+)
+SELECT * FROM Descendants;
+```
+**What**: Drill-down subcategory finder.
+**Why**: Organize or delete nested sets.
+**How**: Recursive hierarchy.
+
+---
+
+### 9. Find most expensive product per category
+```sql
+WITH RankedProducts AS (
+  SELECT p.ProductId, p.ProductName, c.CategoryId, p.Price,
+         ROW_NUMBER() OVER (PARTITION BY c.CategoryId ORDER BY p.Price DESC) AS rn
+  FROM Products p
+  JOIN Categories c ON p.CategoryId = c.CategoryId
+)
+SELECT * FROM RankedProducts WHERE rn = 1;
+```
+**What**: Find top priced product.
+**Why**: Use in merchandising strategy.
+**How**: Use window + CTE.
+
+---
+
+### 10. Build a recursive calendar date range
+```sql
+WITH Calendar AS (
+  SELECT CAST('2024-01-01' AS DATE) AS DateVal
+
+  UNION ALL
+
+  SELECT DATEADD(DAY, 1, DateVal)
+  FROM Calendar
+  WHERE DateVal < '2024-01-31'
+)
+SELECT * FROM Calendar;
+```
+**What**: Creates a date dimension.
+**Why**: Use in time series reports.
+**How**: Simple date recursion.
+
+
 
 
 
