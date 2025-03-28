@@ -4911,4 +4911,311 @@ END;
 
 ---
 
+# ✅ Stage 9: Query Optimization, Execution Plans & Performance Tuning
+
+This stage focuses on:
+- ✅ Identifying slow queries
+- ✅ Using execution plans
+- ✅ Indexing, statistics, and best practices
+- ✅ Avoiding performance pitfalls
+
+Each of the 25 questions includes:
+- What the optimization problem is
+- Why it matters
+- How to fix or analyze it with SQL
+
+---
+
+### 1. Identify slow queries using sys.dm_exec_requests
+```sql
+SELECT session_id, status, blocking_session_id, wait_type, cpu_time, total_elapsed_time
+FROM sys.dm_exec_requests
+WHERE status = 'running';
+```
+**What**: Find long-running queries.
+**Why**: Locate bottlenecks.
+**How**: Use dynamic management views.
+
+---
+
+### 2. Use execution plan to understand query performance
+```sql
+-- Click on "Include Actual Execution Plan" in SSMS before running a query:
+SELECT * FROM Orders WHERE OrderDate >= '2024-01-01';
+```
+**What**: Visual query map.
+**Why**: Analyze cost.
+**How**: SSMS tool tip shows plan.
+
+---
+
+### 3. Missing index suggestion from execution plan
+```sql
+-- Run this and see plan for index recommendation:
+SELECT * FROM Orders WHERE CustomerId = 123 AND OrderDate >= '2024-01-01';
+```
+**What**: Index hint.
+**Why**: Improve reads.
+**How**: Add recommended index.
+
+---
+
+### 4. Identify missing indexes using DMVs
+```sql
+SELECT *
+FROM sys.dm_db_missing_index_details;
+```
+**What**: Find missing indexes.
+**Why**: Guide tuning.
+**How**: DMV.
+
+---
+
+### 5. Compare logical reads between indexed vs non-indexed column
+```sql
+SET STATISTICS IO ON;
+SELECT * FROM Orders WHERE OrderId = 123;
+SELECT * FROM Orders WHERE MONTH(OrderDate) = 1;
+```
+**What**: Read difference.
+**Why**: Understand I/O impact.
+**How**: Use SET STATISTICS IO.
+
+---
+
+### 6. Create non-clustered index for frequent filter
+```sql
+CREATE NONCLUSTERED INDEX idx_Order_CustomerId ON Orders (CustomerId);
+```
+**What**: Index by column.
+**Why**: Improve WHERE performance.
+**How**: Add NCI.
+
+---
+
+### 7. Use INCLUDE columns in index to cover query
+```sql
+CREATE NONCLUSTERED INDEX idx_CoveringOrder ON Orders (CustomerId) INCLUDE (OrderDate, TotalAmount);
+```
+**What**: Cover query fields.
+**Why**: Avoid lookups.
+**How**: INCLUDE clause.
+
+---
+
+### 8. Check query plan for key lookup (bad sign)
+```sql
+-- Use execution plan to find Key Lookup warnings:
+SELECT CustomerId, OrderDate FROM Orders WHERE CustomerId = 42;
+```
+**What**: Key lookup.
+**Why**: Indicates missing INCLUDE.
+**How**: Tune with covering index.
+
+---
+
+### 9. Use parameterized queries to reuse plans
+```sql
+DECLARE @cid INT = 123;
+SELECT * FROM Orders WHERE CustomerId = @cid;
+```
+**What**: Plan reuse.
+**Why**: Reduce compilation.
+**How**: Use parameters.
+
+---
+
+### 10. Avoid function use in WHERE clause
+```sql
+-- Bad (non-sargable):
+SELECT * FROM Orders WHERE MONTH(OrderDate) = 1;
+-- Good:
+SELECT * FROM Orders WHERE OrderDate >= '2024-01-01' AND OrderDate < '2024-02-01';
+```
+**What**: SARGability.
+**Why**: Index usage.
+**How**: Rewrite predicates.
+
+---
+
+### 11. Detect blocking with sys.dm_os_waiting_tasks
+```sql
+SELECT * FROM sys.dm_os_waiting_tasks WHERE blocking_session_id IS NOT NULL;
+```
+**What**: See blockers.
+**Why**: Resolve contention.
+**How**: DMV analysis.
+
+---
+
+### 12. Detect fragmented indexes
+```sql
+SELECT *
+FROM sys.dm_db_index_physical_stats(DB_ID(), NULL, NULL, NULL, 'LIMITED')
+WHERE avg_fragmentation_in_percent > 30;
+```
+**What**: Index health.
+**Why**: Reorganize/rebuild.
+**How**: DMV index stats.
+
+---
+
+### 13. Rebuild or reorganize index
+```sql
+ALTER INDEX idx_Order_CustomerId ON Orders REBUILD;
+-- Or:
+ALTER INDEX idx_Order_CustomerId ON Orders REORGANIZE;
+```
+**What**: Fix fragmentation.
+**Why**: Performance boost.
+**How**: ALTER INDEX.
+
+---
+
+### 14. Update statistics manually
+```sql
+UPDATE STATISTICS Orders;
+```
+**What**: Refresh stats.
+**Why**: Accurate plans.
+**How**: Manual trigger.
+
+---
+
+### 15. Use indexed views for performance
+```sql
+CREATE VIEW vw_OrderRevenue
+WITH SCHEMABINDING AS
+SELECT CustomerId, COUNT_BIG(*) AS TotalOrders, SUM(TotalAmount) AS Revenue
+FROM dbo.Orders
+GROUP BY CustomerId;
+
+CREATE UNIQUE CLUSTERED INDEX idx_OrderRevenue ON vw_OrderRevenue (CustomerId);
+```
+**What**: Pre-aggregated data.
+**Why**: Fast reads.
+**How**: Indexed view.
+
+---
+
+### 16. Compare table scans vs seeks
+```sql
+-- Use execution plan to check if query does seek or scan:
+SELECT * FROM Orders WHERE CustomerId = 456;
+```
+**What**: Access method.
+**Why**: Index validation.
+**How**: Execution plan type.
+
+---
+
+### 17. Avoid SELECT * in production
+```sql
+-- Bad:
+SELECT * FROM Products;
+-- Good:
+SELECT ProductId, ProductName, Price FROM Products;
+```
+**What**: Reduces I/O.
+**Why**: Leaner queries.
+**How**: Select specific columns.
+
+---
+
+### 18. Use proper data types (avoid implicit conversions)
+```sql
+-- This causes scan due to conversion:
+SELECT * FROM Orders WHERE CustomerId = '123';
+-- Correct:
+SELECT * FROM Orders WHERE CustomerId = 123;
+```
+**What**: Data type mismatch.
+**Why**: Forces conversion.
+**How**: Match data types.
+
+---
+
+### 19. Monitor plan cache for expensive queries
+```sql
+SELECT TOP 10
+    qs.total_elapsed_time / qs.execution_count AS AvgElapsedTime,
+    qs.execution_count,
+    qt.text
+FROM sys.dm_exec_query_stats qs
+CROSS APPLY sys.dm_exec_sql_text(qs.sql_handle) qt
+ORDER BY AvgElapsedTime DESC;
+```
+**What**: Find slow queries.
+**Why**: Tune top offenders.
+**How**: DMVs.
+
+---
+
+### 20. Use FORCESEEK to override optimizer
+```sql
+SELECT * FROM Orders WITH (FORCESEEK)
+WHERE CustomerId = 123;
+```
+**What**: Override scan.
+**Why**: Index enforcement.
+**How**: Query hint.
+
+---
+
+### 21. Detect parameter sniffing issue
+```sql
+-- Use different execution plan for same query:
+EXEC sp_executesql N'SELECT * FROM Orders WHERE CustomerId = @id', N'@id INT', @id = 1;
+```
+**What**: Varies by input.
+**Why**: Plan mismatch.
+**How**: Sniffing analysis.
+
+---
+
+### 22. Use OPTION(RECOMPILE) for one-time optimization
+```sql
+SELECT * FROM Orders WHERE CustomerId = 123 OPTION(RECOMPILE);
+```
+**What**: Forces new plan.
+**Why**: Avoid reuse issues.
+**How**: Recompile hint.
+
+---
+
+### 23. Use EXISTS instead of COUNT(*) > 0
+```sql
+-- Better:
+IF EXISTS (SELECT 1 FROM Orders WHERE CustomerId = 123)
+-- Slower:
+IF (SELECT COUNT(*) FROM Orders WHERE CustomerId = 123) > 0
+```
+**What**: Short-circuit.
+**Why**: Faster.
+**How**: EXISTS.
+
+---
+
+### 24. Monitor wait stats globally
+```sql
+SELECT * FROM sys.dm_os_wait_stats ORDER BY wait_time_ms DESC;
+```
+**What**: System waits.
+**Why**: Detect blocking/resource bottlenecks.
+**How**: Wait stats.
+
+---
+
+### 25. Use SET STATISTICS TIME and IO for manual benchmarking
+```sql
+SET STATISTICS TIME ON;
+SET STATISTICS IO ON;
+SELECT * FROM Orders WHERE OrderId = 100;
+```
+**What**: See actual query cost.
+**Why**: Optimization proof.
+**How**: SSMS outputs CPU/reads.
+
+---
+
 
