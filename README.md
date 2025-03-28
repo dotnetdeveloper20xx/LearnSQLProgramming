@@ -1522,6 +1522,156 @@ FROM CHANGETABLE(CHANGES Orders, 101) AS CT; -- 101 = last sync version
 
 ---
 
+### 🤖 Stage 13: Monitoring & Performance Insights (Comprehensive)
+
+#### 🔬 Concepts Introduced:
+- **Query Store**: Tracks execution plans and performance stats for T-SQL queries
+- **Wait Stats**: Analyze resource waits like CPU, I/O, memory, locks
+- **DMVs (Dynamic Management Views)**: Real-time internal metrics from SQL Server
+- **Blocking & Deadlocks**: Identifying queries that are stuck or waiting
+- **Performance Baselines**: Log and compare KPIs over time
+
+---
+
+### 💼 Why This Matters
+Performance bottlenecks can cripple business operations. Mastering these tools allows you to:
+- Detect slow queries before users report them
+- Track down which processes are blocking others
+- Build custom performance dashboards for developers and DBAs
+
+---
+
+### 🔍 Part 1: Enabling and Using Query Store
+
+```sql
+-- Enable Query Store (if not already)
+ALTER DATABASE EcommerceDB SET QUERY_STORE = ON;
+ALTER DATABASE EcommerceDB SET QUERY_STORE (OPERATION_MODE = READ_WRITE);
+```
+
+```sql
+-- Top resource-heavy queries
+SELECT
+    qt.query_sql_text,
+    rs.avg_duration AS AvgDuration,
+    rs.avg_cpu_time AS AvgCPU,
+    rs.avg_logical_io_reads AS AvgReads
+FROM sys.query_store_query_text qt
+JOIN sys.query_store_query q ON qt.query_text_id = q.query_text_id
+JOIN sys.query_store_plan p ON q.query_id = p.query_id
+JOIN sys.query_store_runtime_stats rs ON p.plan_id = rs.plan_id
+ORDER BY rs.avg_duration DESC;
+```
+
+---
+
+### ⌛ Part 2: Wait Stats (Resource Wait Analysis)
+
+```sql
+-- Common wait types and time spent waiting (excluding idle waits)
+SELECT TOP 10
+    wait_type,
+    wait_time_ms / 1000.0 AS SecondsWaited,
+    signal_wait_time_ms / 1000.0 AS CPU_QueueTime,
+    waiting_tasks_count AS WaitCount
+FROM sys.dm_os_wait_stats
+WHERE wait_type NOT LIKE '%SLEEP%'
+ORDER BY wait_time_ms DESC;
+```
+
+- **What it tells you**: What your server is waiting on the most
+- **Use it when**: Server is slow and you need to know why (e.g., locking, I/O, memory bottlenecks)
+
+---
+
+### 🚗 Part 3: Find Blocking Sessions
+
+```sql
+-- Shows who is blocking whom
+SELECT
+    r.session_id AS BlockedSession,
+    r.blocking_session_id AS BlockingSession,
+    r.wait_type,
+    r.wait_time,
+    r.status,
+    t.text AS SQL
+FROM sys.dm_exec_requests r
+JOIN sys.dm_exec_sessions s ON r.session_id = s.session_id
+CROSS APPLY sys.dm_exec_sql_text(r.sql_handle) t
+WHERE r.blocking_session_id <> 0;
+```
+
+```sql
+-- Identify blocking chains for long-running waits
+-- Can be visualized with tools like SQL Server Management Studio or manually
+```
+
+---
+
+### 📊 Part 4: DMV Dashboards (Real-Time Monitoring)
+
+```sql
+-- Top CPU Consumers
+SELECT TOP 5
+    text AS QueryText,
+    total_worker_time / execution_count AS AvgCPU,
+    execution_count,
+    total_elapsed_time / execution_count AS AvgDuration
+FROM sys.dm_exec_query_stats
+CROSS APPLY sys.dm_exec_sql_text(sql_handle)
+ORDER BY AvgCPU DESC;
+```
+
+```sql
+-- Top I/O Consumers
+SELECT TOP 5
+    text AS QueryText,
+    total_logical_reads / execution_count AS AvgReads,
+    execution_count
+FROM sys.dm_exec_query_stats
+CROSS APPLY sys.dm_exec_sql_text(sql_handle)
+ORDER BY AvgReads DESC;
+```
+
+---
+
+### 📅 Part 5: Scheduled Performance Snapshot Logger
+
+```sql
+-- Create snapshot table
+CREATE TABLE dbo.PerformanceSnapshots (
+    SnapshotTime DATETIME DEFAULT GETDATE(),
+    QueryText NVARCHAR(MAX),
+    AvgCPU BIGINT,
+    AvgDuration BIGINT,
+    ExecutionCount INT
+);
+
+-- Insert snapshot for high CPU queries (can schedule via SQL Agent)
+INSERT INTO dbo.PerformanceSnapshots (QueryText, AvgCPU, AvgDuration, ExecutionCount)
+SELECT TOP 10
+    text,
+    total_worker_time / execution_count,
+    total_elapsed_time / execution_count,
+    execution_count
+FROM sys.dm_exec_query_stats
+CROSS APPLY sys.dm_exec_sql_text(sql_handle)
+ORDER BY total_worker_time DESC;
+```
+
+---
+
+### 🥵 Part 6: Live Monitoring Checklist
+- ✅ Enable Query Store
+- ✅ Review `sys.dm_exec_query_stats` for hot spots
+- ✅ Check `sys.dm_os_wait_stats` for external pressure (I/O, memory, locks)
+- ✅ Detect blocking via `sys.dm_exec_requests`
+- ✅ Log top queries to historical table daily
+- ✅ Use SQL Server Agent to automate ETL from DMVs
+
+---
+
+
 
 
 
