@@ -456,6 +456,93 @@ JOIN Products p ON v.ProductId = p.ProductId;
 
 ---
 
+### 🧰 Stage 4: Window Functions & Analytics
+
+#### 🔬 Skills Covered:
+- `ROW_NUMBER()`, `RANK()`, `DENSE_RANK()`
+- `LEAD()`, `LAG()`
+- `NTILE()`
+- Running totals & cumulative aggregates
+- Partitioning vs ordering
+
+#### 💼 Objectives:
+- Perform advanced row-by-row analysis
+- Rank and compare data within groups
+- Calculate trends using historical comparisons
+
+#### 🔍 Example Queries:
+
+```sql
+-- Rank products by total sales within each category
+SELECT 
+    c.Name AS Category, 
+    p.Name AS ProductName,
+    SUM(oi.Quantity) AS TotalSold,
+    RANK() OVER (
+        PARTITION BY c.Name        -- Restart ranking for each category
+        ORDER BY SUM(oi.Quantity) DESC -- Rank products by total quantity sold
+    ) AS SalesRank
+FROM OrderItems oi
+JOIN ProductVariants v ON oi.VariantId = v.VariantId
+JOIN Products p ON v.ProductId = p.ProductId
+JOIN Categories c ON p.CategoryId = c.CategoryId
+GROUP BY c.Name, p.Name;
+
+-- Assign a row number to each customer's orders (latest first)
+SELECT 
+    CustomerId, 
+    OrderId, 
+    OrderDate,
+    ROW_NUMBER() OVER (
+        PARTITION BY CustomerId         -- Restart numbering for each customer
+        ORDER BY OrderDate DESC         -- Newest order gets row number 1
+    ) AS OrderSequence
+FROM Orders;
+
+-- Calculate daily revenue and running total revenue
+SELECT 
+    CAST(o.OrderDate AS DATE) AS OrderDay,                             -- Extract date from datetime
+    SUM(oi.PriceAtPurchase * oi.Quantity) AS DailyRevenue,            -- Revenue for that day
+    SUM(SUM(oi.PriceAtPurchase * oi.Quantity)) OVER (
+        ORDER BY CAST(o.OrderDate AS DATE)                            -- Calculate cumulative total by date
+    ) AS RunningRevenue
+FROM Orders o
+JOIN OrderItems oi ON o.OrderId = oi.OrderId
+GROUP BY CAST(o.OrderDate AS DATE);
+
+-- Compare each customer's current and previous order totals
+SELECT 
+    o.CustomerId, 
+    o.OrderId, 
+    o.OrderDate,
+    SUM(oi.PriceAtPurchase * oi.Quantity) AS OrderTotal,
+    LAG(SUM(oi.PriceAtPurchase * oi.Quantity)) OVER (
+        PARTITION BY o.CustomerId        -- Get previous order's value for same customer
+        ORDER BY o.OrderDate             -- Order their history by date
+    ) AS PreviousOrderTotal
+FROM Orders o
+JOIN OrderItems oi ON o.OrderId = oi.OrderId
+GROUP BY o.CustomerId, o.OrderId, o.OrderDate;
+
+-- Split customers into 4 groups based on their order count (quartiles)
+SELECT 
+    CustomerId, 
+    COUNT(*) AS TotalOrders,
+    NTILE(4) OVER (
+        ORDER BY COUNT(*) DESC           -- Rank customers by order volume, highest first
+    ) AS Quartile
+FROM Orders
+GROUP BY CustomerId;
+```
+
+#### 🧵 What, Why, How
+- **What**: Window functions let you calculate values over a group of rows without collapsing them.
+- **Why**: Crucial for analytics like rankings, trends, and comparisons that require both row-level detail and group-level calculations.
+- **How**: Use `OVER()` with `PARTITION BY` and `ORDER BY` to define the scope and sequence of the calculation.
+
+---
+
+
 
 
 
