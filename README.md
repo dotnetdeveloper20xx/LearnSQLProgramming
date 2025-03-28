@@ -3295,4 +3295,394 @@ END;
 
 ---
 
+# ✅ Stage 5: Views, Materialized Views & Modular Queries – Reusable & Performance-Driven SQL
+
+In this stage, we focus on:
+- ✅ Simple and complex **Views**
+- ✅ Indexed/Materialized Views
+- ✅ Reusable modular query patterns
+- ✅ Encapsulation of logic for BI and performance
+
+Each question includes:
+- Use case
+- What/Why/How explanation
+- Code example
+
+---
+
+### 1. Create a simple view for active customers
+```sql
+CREATE VIEW vw_ActiveCustomers AS
+SELECT CustomerId, FullName, Email
+FROM Customers
+WHERE IsActive = 1;
+```
+**What**: Filters active users.
+**Why**: Avoid repeating WHERE clause.
+**How**: Simple SELECT with filter.
+
+---
+
+### 2. Create a view for product inventory with threshold
+```sql
+CREATE VIEW vw_LowInventory AS
+SELECT VariantId, QuantityAvailable
+FROM Inventory
+WHERE QuantityAvailable < 10;
+```
+**What**: Inventory alerts.
+**Why**: Support restock workflows.
+**How**: SELECT + filter.
+
+---
+
+### 3. View combining order with customer name
+```sql
+CREATE VIEW vw_OrderSummary AS
+SELECT o.OrderId, o.OrderDate, c.FullName
+FROM Orders o
+JOIN Customers c ON o.CustomerId = c.CustomerId;
+```
+**What**: Order overview.
+**Why**: Useful in BI tools.
+**How**: JOIN inside view.
+
+---
+
+### 4. Parameter-like filtering using inline views
+```sql
+-- Use inline view inside FROM
+SELECT *
+FROM (
+  SELECT * FROM Orders WHERE Status = 'Delivered'
+) AS DeliveredOrders
+WHERE OrderDate >= '2024-01-01';
+```
+**What**: Composable logic.
+**Why**: Stackable queries.
+**How**: Subquery alias.
+
+---
+
+### 5. Create a view for average order value per customer
+```sql
+CREATE VIEW vw_AvgOrderValue AS
+SELECT o.CustomerId,
+       AVG(oi.Quantity * oi.PriceAtPurchase) AS AvgValue
+FROM Orders o
+JOIN OrderItems oi ON o.OrderId = oi.OrderId
+GROUP BY o.CustomerId;
+```
+**What**: Customer metric.
+**Why**: Reporting.
+**How**: Aggregation in view.
+
+---
+
+### 6. Materialized view (indexed) for fast sales totals
+```sql
+-- SQL Server: create indexed view for total revenue
+CREATE VIEW vw_TotalSales
+WITH SCHEMABINDING AS
+SELECT CustomerId,
+       COUNT_BIG(*) AS OrderCount,
+       SUM(CONVERT(DECIMAL(10,2), oi.Quantity * oi.PriceAtPurchase)) AS Revenue
+FROM dbo.Orders o
+JOIN dbo.OrderItems oi ON o.OrderId = oi.OrderId
+GROUP BY CustomerId;
+
+CREATE UNIQUE CLUSTERED INDEX idx_TotalSales
+ON vw_TotalSales (CustomerId);
+```
+**What**: Fast snapshot.
+**Why**: Precomputed aggregation.
+**How**: Indexed view.
+
+---
+
+### 7. View to extract pending shipment details
+```sql
+CREATE VIEW vw_PendingShipments AS
+SELECT s.ShipmentId, o.OrderId, o.OrderDate, s.Status
+FROM Shipments s
+JOIN Orders o ON s.OrderId = o.OrderId
+WHERE s.Status = 'Pending';
+```
+**What**: Ready-to-ship items.
+**Why**: Logistics dashboard.
+**How**: JOIN + WHERE filter.
+
+---
+
+### 8. View with computed column for profit
+```sql
+CREATE VIEW vw_ProductProfit AS
+SELECT p.ProductId, p.ProductName, p.CostPrice, p.SalePrice,
+       (p.SalePrice - p.CostPrice) AS ProfitMargin
+FROM Products p;
+```
+**What**: Tracks profit margin.
+**Why**: Margin analysis.
+**How**: Computed column.
+
+---
+
+### 9. Combine view with window function for ranks
+```sql
+CREATE VIEW vw_CustomerSpendingRank AS
+SELECT CustomerId, 
+       SUM(oi.Quantity * oi.PriceAtPurchase) AS TotalSpent,
+       RANK() OVER (ORDER BY SUM(oi.Quantity * oi.PriceAtPurchase) DESC) AS SpendRank
+FROM Orders o
+JOIN OrderItems oi ON o.OrderId = oi.OrderId
+GROUP BY CustomerId;
+```
+**What**: Leaderboard.
+**Why**: Loyalty tiers.
+**How**: Window inside view.
+
+---
+
+### 10. View for average delivery time
+```sql
+CREATE VIEW vw_AvgDeliveryTime AS
+SELECT CarrierId,
+       AVG(DATEDIFF(DAY, ShippedDate, DeliveredDate)) AS AvgDays
+FROM Shipments
+WHERE DeliveredDate IS NOT NULL
+GROUP BY CarrierId;
+```
+**What**: Delivery SLA tracker.
+**Why**: Logistics QA.
+**How**: DATEDIFF + AVG.
+
+---
+
+### 11. Use a view to simplify a complex join
+```sql
+CREATE VIEW vw_OrderDetailFull AS
+SELECT o.OrderId, o.OrderDate, c.FullName, p.ProductName, oi.Quantity
+FROM Orders o
+JOIN Customers c ON o.CustomerId = c.CustomerId
+JOIN OrderItems oi ON o.OrderId = oi.OrderId
+JOIN ProductVariants v ON oi.VariantId = v.VariantId
+JOIN Products p ON v.ProductId = p.ProductId;
+```
+**What**: Complex view.
+**Why**: Reduces join code.
+**How**: Multi-join logic.
+
+---
+
+### 12. View for monthly sales per category
+```sql
+CREATE VIEW vw_MonthlyCategorySales AS
+SELECT FORMAT(o.OrderDate, 'yyyy-MM') AS Month, c.CategoryName,
+       SUM(oi.Quantity * oi.PriceAtPurchase) AS Revenue
+FROM Orders o
+JOIN OrderItems oi ON o.OrderId = oi.OrderId
+JOIN ProductVariants v ON oi.VariantId = v.VariantId
+JOIN Products p ON v.ProductId = p.ProductId
+JOIN Categories c ON p.CategoryId = c.CategoryId
+GROUP BY FORMAT(o.OrderDate, 'yyyy-MM'), c.CategoryName;
+```
+**What**: Time-series sales.
+**Why**: BI trends.
+**How**: FORMAT + GROUP BY.
+
+---
+
+### 13. View for top 5 categories (ranking filter outside)
+```sql
+CREATE VIEW vw_CategoryRevenue AS
+SELECT c.CategoryName,
+       SUM(oi.Quantity * oi.PriceAtPurchase) AS Revenue
+FROM OrderItems oi
+JOIN ProductVariants v ON oi.VariantId = v.VariantId
+JOIN Products p ON v.ProductId = p.ProductId
+JOIN Categories c ON p.CategoryId = c.CategoryId
+GROUP BY c.CategoryName;
+```
+**What**: Top categories.
+**Why**: Inventory strategy.
+**How**: Aggregate logic in view.
+
+---
+
+### 14. Reusable view for shipment delays
+```sql
+CREATE VIEW vw_DelayedShipments AS
+SELECT ShipmentId, OrderId, DATEDIFF(DAY, ShippedDate, DeliveredDate) AS Delay
+FROM Shipments
+WHERE DeliveredDate > ExpectedDeliveryDate;
+```
+**What**: Track SLA failures.
+**Why**: Performance audits.
+**How**: DATEDIFF.
+
+---
+
+### 15. Indexed view for most sold products
+```sql
+CREATE VIEW vw_MostSoldProducts
+WITH SCHEMABINDING AS
+SELECT v.VariantId, COUNT_BIG(*) AS SoldCount
+FROM dbo.OrderItems oi
+JOIN dbo.ProductVariants v ON oi.VariantId = v.VariantId
+GROUP BY v.VariantId;
+
+CREATE UNIQUE CLUSTERED INDEX idx_SoldCount ON vw_MostSoldProducts (VariantId);
+```
+**What**: For fast lookup.
+**Why**: Analytics performance.
+**How**: Indexed view setup.
+
+---
+
+### 16. Create view with CASE statement for customer tier
+```sql
+CREATE VIEW vw_CustomerTier AS
+SELECT CustomerId,
+       SUM(oi.Quantity * oi.PriceAtPurchase) AS TotalSpend,
+       CASE
+           WHEN SUM(oi.Quantity * oi.PriceAtPurchase) >= 1000 THEN 'Gold'
+           WHEN SUM(oi.Quantity * oi.PriceAtPurchase) >= 500 THEN 'Silver'
+           ELSE 'Bronze'
+       END AS Tier
+FROM Orders o
+JOIN OrderItems oi ON o.OrderId = oi.OrderId
+GROUP BY CustomerId;
+```
+**What**: Customer segmentation.
+**Why**: Loyalty program.
+**How**: CASE logic in view.
+
+---
+
+### 17. Use view in report: category sales by day
+```sql
+SELECT * FROM vw_MonthlyCategorySales WHERE Month = '2024-01';
+```
+**What**: Reporting usage.
+**Why**: Reusability.
+**How**: Querying view.
+
+---
+
+### 18. View for payment summary per method
+```sql
+CREATE VIEW vw_PaymentSummary AS
+SELECT PaymentMethod, COUNT(*) AS PaymentCount,
+       SUM(Amount) AS TotalAmount
+FROM Payments
+GROUP BY PaymentMethod;
+```
+**What**: Finance view.
+**Why**: Gateway analysis.
+**How**: GROUP BY logic.
+
+---
+
+### 19. View with COALESCE for null-safe output
+```sql
+CREATE VIEW vw_CustomerContacts AS
+SELECT CustomerId, FullName,
+       COALESCE(PhoneNumber, 'N/A') AS Phone,
+       COALESCE(Email, 'Unknown') AS Email
+FROM Customers;
+```
+**What**: Null-safe display.
+**Why**: Consistent output.
+**How**: COALESCE for fallback.
+
+---
+
+### 20. Create dynamic view filtered by month (to be parameterized)
+```sql
+-- Not truly dynamic in SQL Server, use with a filtered wrapper
+CREATE VIEW vw_JanOrders AS
+SELECT * FROM Orders
+WHERE MONTH(OrderDate) = 1;
+```
+**What**: Time slice.
+**Why**: Snapshot for static views.
+**How**: Static WHERE.
+
+---
+
+### 21. Combine sales and refunds in one view
+```sql
+CREATE VIEW vw_NetSales AS
+SELECT o.OrderId, o.OrderDate, SUM(oi.Quantity * oi.PriceAtPurchase) AS GrossSales,
+       ISNULL(r.RefundAmount, 0) AS Refunds,
+       SUM(oi.Quantity * oi.PriceAtPurchase) - ISNULL(r.RefundAmount, 0) AS NetSales
+FROM Orders o
+JOIN OrderItems oi ON o.OrderId = oi.OrderId
+LEFT JOIN Refunds r ON o.OrderId = r.OrderId
+GROUP BY o.OrderId, o.OrderDate, r.RefundAmount;
+```
+**What**: Net sales view.
+**Why**: Reconcile returns.
+**How**: Join + subtraction.
+
+---
+
+### 22. View to support real-time dashboard
+```sql
+CREATE VIEW vw_LiveKPIs AS
+SELECT COUNT(*) AS TotalOrders,
+       SUM(oi.Quantity * oi.PriceAtPurchase) AS RevenueToday
+FROM Orders o
+JOIN OrderItems oi ON o.OrderId = oi.OrderId
+WHERE CAST(OrderDate AS DATE) = CAST(GETDATE() AS DATE);
+```
+**What**: Daily stats.
+**Why**: Live dashboard tiles.
+**How**: CAST for today.
+
+---
+
+### 23. View with UNION for multi-table reporting
+```sql
+CREATE VIEW vw_UserActions AS
+SELECT 'Order' AS ActionType, CustomerId, CreatedAt FROM Orders
+UNION
+SELECT 'Refund', CustomerId, CreatedAt FROM Refunds;
+```
+**What**: Unified activity stream.
+**Why**: Behavioral logs.
+**How**: UNION logic.
+
+---
+
+### 24. View for abandoned carts
+```sql
+CREATE VIEW vw_AbandonedCarts AS
+SELECT c.CustomerId, c.CartCreatedAt, DATEDIFF(HOUR, c.CartCreatedAt, GETDATE()) AS HoursSinceLastActive
+FROM Carts c
+WHERE c.IsCheckedOut = 0;
+```
+**What**: Marketing re-targeting.
+**Why**: Cart abandonment.
+**How**: Timer logic.
+
+---
+
+### 25. Indexed view for fast lookup of available stock
+```sql
+CREATE VIEW vw_StockAvailability
+WITH SCHEMABINDING AS
+SELECT VariantId, QuantityAvailable
+FROM dbo.Inventory
+WHERE QuantityAvailable > 0;
+
+CREATE UNIQUE CLUSTERED INDEX idx_StockAvailability
+ON vw_StockAvailability (VariantId);
+```
+**What**: Optimize reads.
+**Why**: Real-time checks.
+**How**: Materialized + filtered.
+
+---
+
 
