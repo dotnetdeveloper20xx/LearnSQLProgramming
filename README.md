@@ -4372,4 +4372,543 @@ GROUP BY GROUPING SETS (
 
 ---
 
+# ✅ Stage 8: Triggers, Auditing, and Data Integrity Automation
+
+This stage explores:
+- ✅ AFTER and INSTEAD OF triggers
+- ✅ Audit trails for inserts, updates, and deletes
+- ✅ Data integrity enforcement
+- ✅ Automatic calculations and monitoring
+
+Each of the 25 questions includes:
+- Practical use case
+- What/Why/How explanation
+- Full SQL examples with comments
+
+---
+
+### 1. AFTER INSERT trigger to log new orders
+```sql
+CREATE TRIGGER trg_AuditOrderInsert
+ON Orders
+AFTER INSERT
+AS
+BEGIN
+    INSERT INTO OrderAuditLog (OrderId, Action, ActionDate)
+    SELECT OrderId, 'INSERT', GETDATE()
+    FROM inserted;
+END;
+```
+**What**: Logs order creation.
+**Why**: For auditing.
+**How**: Uses inserted pseudo-table.
+
+---
+
+### 2. AFTER UPDATE trigger to track price changes
+```sql
+CREATE TRIGGER trg_AuditProductPriceChange
+ON Products
+AFTER UPDATE
+AS
+BEGIN
+    INSERT INTO PriceAudit (ProductId, OldPrice, NewPrice, ChangeDate)
+    SELECT d.ProductId, d.Price, i.Price, GETDATE()
+    FROM deleted d
+    JOIN inserted i ON d.ProductId = i.ProductId
+    WHERE d.Price <> i.Price;
+END;
+```
+**What**: Logs only changed prices.
+**Why**: Price policy compliance.
+**How**: Compare deleted vs inserted.
+
+---
+
+### 3. INSTEAD OF DELETE to prevent customer deletion if orders exist
+```sql
+CREATE TRIGGER trg_PreventCustomerDeletion
+ON Customers
+INSTEAD OF DELETE
+AS
+BEGIN
+    IF EXISTS (
+        SELECT 1 FROM deleted d
+        JOIN Orders o ON d.CustomerId = o.CustomerId
+    )
+    BEGIN
+        RAISERROR('Cannot delete customers with existing orders.', 16, 1);
+        ROLLBACK;
+    END
+    ELSE
+    BEGIN
+        DELETE FROM Customers WHERE CustomerId IN (SELECT CustomerId FROM deleted);
+    END
+END;
+```
+**What**: Prevent deletes.
+**Why**: Keep data integrity.
+**How**: Checks before delete.
+
+---
+
+### 4. AFTER INSERT trigger to auto-calculate inventory
+```sql
+CREATE TRIGGER trg_UpdateInventoryOnOrder
+ON OrderItems
+AFTER INSERT
+AS
+BEGIN
+    UPDATE Inventory
+    SET QuantityAvailable = QuantityAvailable - i.Quantity
+    FROM Inventory inv
+    JOIN inserted i ON inv.VariantId = i.VariantId;
+END;
+```
+**What**: Auto-decrement stock.
+**Why**: Real-time updates.
+**How**: INSERT trigger logic.
+
+---
+
+### 5. INSTEAD OF UPDATE for soft edits with versioning
+```sql
+CREATE TRIGGER trg_SoftEditProduct
+ON Products
+INSTEAD OF UPDATE
+AS
+BEGIN
+    INSERT INTO ProductVersions (ProductId, ProductName, Price, ModifiedAt)
+    SELECT ProductId, ProductName, Price, GETDATE()
+    FROM deleted;
+
+    UPDATE Products
+    SET ProductName = i.ProductName,
+        Price = i.Price
+    FROM inserted i
+    WHERE Products.ProductId = i.ProductId;
+END;
+```
+**What**: Archives old record.
+**Why**: Change history.
+**How**: Versioning table.
+
+---
+
+### 6. AFTER DELETE trigger to log removed users
+```sql
+CREATE TRIGGER trg_LogDeletedUser
+ON Customers
+AFTER DELETE
+AS
+BEGIN
+    INSERT INTO DeletionLog (EntityId, EntityType, DeletedAt)
+    SELECT CustomerId, 'Customer', GETDATE()
+    FROM deleted;
+END;
+```
+**What**: Delete log.
+**Why**: Accountability.
+**How**: INSERT from deleted.
+
+---
+
+### 7. Prevent negative inventory using AFTER INSERT
+```sql
+CREATE TRIGGER trg_CheckInventoryLimits
+ON OrderItems
+AFTER INSERT
+AS
+BEGIN
+    IF EXISTS (
+        SELECT 1 FROM inserted i
+        JOIN Inventory inv ON i.VariantId = inv.VariantId
+        WHERE inv.QuantityAvailable - i.Quantity < 0
+    )
+    BEGIN
+        RAISERROR('Inventory cannot go negative.', 16, 1);
+        ROLLBACK;
+    END
+END;
+```
+**What**: Inventory guard.
+**Why**: Prevent over-selling.
+**How**: Post-insert check.
+
+---
+
+### 8. Log refund creation
+```sql
+CREATE TRIGGER trg_LogRefundInsert
+ON Refunds
+AFTER INSERT
+AS
+BEGIN
+    INSERT INTO RefundAudit (RefundId, OrderId, Action, Timestamp)
+    SELECT RefundId, OrderId, 'Refund Issued', GETDATE()
+    FROM inserted;
+END;
+```
+**What**: Track refunds.
+**Why**: Customer care.
+**How**: Triggered insert.
+
+---
+
+### 9. Trigger to log login attempts
+```sql
+CREATE TRIGGER trg_LogLoginAttempt
+ON LoginEvents
+AFTER INSERT
+AS
+BEGIN
+    INSERT INTO LoginAuditLog (UserId, Status, Timestamp)
+    SELECT UserId, Status, GETDATE()
+    FROM inserted;
+END;
+```
+**What**: Login trail.
+**Why**: Security review.
+**How**: Trigger insert.
+
+---
+
+### 10. Block product updates during sale event
+```sql
+CREATE TRIGGER trg_BlockUpdateDuringSale
+ON Products
+AFTER UPDATE
+AS
+BEGIN
+    IF EXISTS (SELECT 1 FROM inserted WHERE IsOnSale = 1)
+    BEGIN
+        RAISERROR('Product cannot be updated during sale.', 16, 1);
+        ROLLBACK;
+    END
+END;
+```
+**What**: Temporary lock.
+**Why**: Avoid price issues.
+**How**: Conditional check.
+
+---
+
+### 11. Log changes to email field
+```sql
+CREATE TRIGGER trg_EmailChangeLog
+ON Customers
+AFTER UPDATE
+AS
+BEGIN
+    INSERT INTO EmailChangeLog (CustomerId, OldEmail, NewEmail, ChangedAt)
+    SELECT d.CustomerId, d.Email, i.Email, GETDATE()
+    FROM deleted d
+    JOIN inserted i ON d.CustomerId = i.CustomerId
+    WHERE d.Email <> i.Email;
+END;
+```
+**What**: Email trail.
+**Why**: Verification.
+**How**: Compare fields.
+
+---
+
+### 12. Create trigger to enforce max order value
+```sql
+CREATE TRIGGER trg_MaxOrderValue
+ON Orders
+AFTER INSERT
+AS
+BEGIN
+    IF EXISTS (
+        SELECT 1 FROM inserted i
+        JOIN OrderItems oi ON i.OrderId = oi.OrderId
+        GROUP BY i.OrderId
+        HAVING SUM(oi.Quantity * oi.PriceAtPurchase) > 5000
+    )
+    BEGIN
+        RAISERROR('Order exceeds max limit.', 16, 1);
+        ROLLBACK;
+    END
+END;
+```
+**What**: Order cap.
+**Why**: Fraud prevention.
+**How**: Post-insert calculation.
+
+---
+
+### 13. Trigger to log changes in inventory quantity
+```sql
+CREATE TRIGGER trg_LogInventoryChange
+ON Inventory
+AFTER UPDATE
+AS
+BEGIN
+    INSERT INTO InventoryAudit (VariantId, OldQty, NewQty, ChangedAt)
+    SELECT d.VariantId, d.QuantityAvailable, i.QuantityAvailable, GETDATE()
+    FROM deleted d
+    JOIN inserted i ON d.VariantId = i.VariantId
+    WHERE d.QuantityAvailable <> i.QuantityAvailable;
+END;
+```
+**What**: Quantity audit.
+**Why**: Warehouse accuracy.
+**How**: Track delta.
+
+---
+
+### 14. Prevent deleting default shipping address
+```sql
+CREATE TRIGGER trg_BlockDefaultShippingDelete
+ON ShippingAddresses
+INSTEAD OF DELETE
+AS
+BEGIN
+    IF EXISTS (
+        SELECT 1 FROM deleted WHERE IsDefault = 1
+    )
+    BEGIN
+        RAISERROR('Cannot delete default shipping address.', 16, 1);
+        ROLLBACK;
+    END
+    ELSE
+    BEGIN
+        DELETE FROM ShippingAddresses WHERE AddressId IN (SELECT AddressId FROM deleted);
+    END
+END;
+```
+**What**: Protect key info.
+**Why**: UX/data quality.
+**How**: Trigger + ROLLBACK.
+
+---
+
+### 15. Log category changes in products
+```sql
+CREATE TRIGGER trg_CategoryChangeLog
+ON Products
+AFTER UPDATE
+AS
+BEGIN
+    INSERT INTO CategoryAudit (ProductId, OldCategory, NewCategory, ChangedAt)
+    SELECT d.ProductId, d.CategoryId, i.CategoryId, GETDATE()
+    FROM deleted d
+    JOIN inserted i ON d.ProductId = i.ProductId
+    WHERE d.CategoryId <> i.CategoryId;
+END;
+```
+**What**: Track reclassifications.
+**Why**: Catalog accuracy.
+**How**: ID check.
+
+---
+
+### 16. Automatically record order timestamp
+```sql
+CREATE TRIGGER trg_AutoTimestampOrder
+ON Orders
+AFTER INSERT
+AS
+BEGIN
+    UPDATE Orders
+    SET CreatedAt = GETDATE()
+    FROM inserted i
+    WHERE Orders.OrderId = i.OrderId;
+END;
+```
+**What**: Auto-timestamp.
+**Why**: Tracking.
+**How**: Update on insert.
+
+---
+
+### 17. Enforce foreign key check via trigger
+```sql
+CREATE TRIGGER trg_CheckCustomerExists
+ON Orders
+AFTER INSERT
+AS
+BEGIN
+    IF EXISTS (
+        SELECT 1 FROM inserted i
+        LEFT JOIN Customers c ON i.CustomerId = c.CustomerId
+        WHERE c.CustomerId IS NULL
+    )
+    BEGIN
+        RAISERROR('Customer ID does not exist.', 16, 1);
+        ROLLBACK;
+    END
+END;
+```
+**What**: Manual FK.
+**Why**: Logical layer enforcement.
+**How**: Left join NULL.
+
+---
+
+### 18. Track last login in Users table
+```sql
+CREATE TRIGGER trg_UpdateLastLogin
+ON LoginEvents
+AFTER INSERT
+AS
+BEGIN
+    UPDATE Users
+    SET LastLogin = GETDATE()
+    FROM inserted i
+    WHERE Users.UserId = i.UserId;
+END;
+```
+**What**: Last seen update.
+**Why**: Session control.
+**How**: Triggered update.
+
+---
+
+### 19. Deny updates to read-only fields
+```sql
+CREATE TRIGGER trg_PreventReadOnlyUpdate
+ON Products
+AFTER UPDATE
+AS
+BEGIN
+    IF EXISTS (
+        SELECT 1 FROM inserted i
+        JOIN deleted d ON i.ProductId = d.ProductId
+        WHERE i.SKU <> d.SKU
+    )
+    BEGIN
+        RAISERROR('Cannot update SKU (read-only).', 16, 1);
+        ROLLBACK;
+    END
+END;
+```
+**What**: Enforce immutability.
+**Why**: Consistency.
+**How**: Column diff check.
+
+---
+
+### 20. Create row-based audit log for updates
+```sql
+CREATE TRIGGER trg_RowAuditOrders
+ON Orders
+AFTER UPDATE
+AS
+BEGIN
+    INSERT INTO OrderUpdateAudit (OrderId, FieldName, OldValue, NewValue, UpdatedAt)
+    SELECT d.OrderId, 'Status', d.Status, i.Status, GETDATE()
+    FROM deleted d
+    JOIN inserted i ON d.OrderId = i.OrderId
+    WHERE d.Status <> i.Status;
+END;
+```
+**What**: Audit field-level.
+**Why**: Detailed tracking.
+**How**: Audit log structure.
+
+---
+
+### 21. Log cart abandonment
+```sql
+CREATE TRIGGER trg_LogAbandonedCart
+ON Carts
+AFTER UPDATE
+AS
+BEGIN
+    INSERT INTO CartAuditLog (CartId, Action, Timestamp)
+    SELECT CartId, 'Abandoned', GETDATE()
+    FROM inserted
+    WHERE IsCheckedOut = 0 AND LastUpdated < DATEADD(HOUR, -24, GETDATE());
+END;
+```
+**What**: Record stale carts.
+**Why**: Marketing recovery.
+**How**: Time filter.
+
+---
+
+### 22. Track delivery delay changes
+```sql
+CREATE TRIGGER trg_TrackDelayChange
+ON Shipments
+AFTER UPDATE
+AS
+BEGIN
+    INSERT INTO ShipmentDelayAudit (ShipmentId, OldExpected, NewExpected, ChangedAt)
+    SELECT d.ShipmentId, d.ExpectedDeliveryDate, i.ExpectedDeliveryDate, GETDATE()
+    FROM deleted d
+    JOIN inserted i ON d.ShipmentId = i.ShipmentId
+    WHERE d.ExpectedDeliveryDate <> i.ExpectedDeliveryDate;
+END;
+```
+**What**: SLA breach review.
+**Why**: Ops accountability.
+**How**: Compare old/new.
+
+---
+
+### 23. Prevent duplicate refunds
+```sql
+CREATE TRIGGER trg_BlockDuplicateRefund
+ON Refunds
+AFTER INSERT
+AS
+BEGIN
+    IF EXISTS (
+        SELECT r.OrderId FROM inserted i
+        JOIN Refunds r ON i.OrderId = r.OrderId
+        GROUP BY r.OrderId
+        HAVING COUNT(*) > 1
+    )
+    BEGIN
+        RAISERROR('Duplicate refund detected.', 16, 1);
+        ROLLBACK;
+    END
+END;
+```
+**What**: Refund control.
+**Why**: Stop over-refunding.
+**How**: Group and count.
+
+---
+
+### 24. Update loyalty points after order
+```sql
+CREATE TRIGGER trg_LoyaltyPointsUpdate
+ON Orders
+AFTER INSERT
+AS
+BEGIN
+    UPDATE Customers
+    SET LoyaltyPoints = LoyaltyPoints + 10
+    FROM Customers c
+    JOIN inserted i ON c.CustomerId = i.CustomerId;
+END;
+```
+**What**: Reward automation.
+**Why**: Loyalty system.
+**How**: INSERT → UPDATE.
+
+---
+
+### 25. Log system-level deletes by admin
+```sql
+CREATE TRIGGER trg_LogAdminDeletes
+ON AdminActions
+AFTER INSERT
+AS
+BEGIN
+    INSERT INTO AdminAuditTrail (AdminId, ActionType, TargetTable, ActionDate)
+    SELECT AdminId, ActionType, TargetTable, GETDATE()
+    FROM inserted;
+END;
+```
+**What**: Admin traceability.
+**Why**: Governance.
+**How**: Track action logs.
+
+---
+
 
