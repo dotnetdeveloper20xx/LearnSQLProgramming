@@ -1111,6 +1111,161 @@ INCLUDE (OrderId, CustomerId, Status);
 ---
 
 
+### 📄 Stage 10: ETL & Warehousing (Master Class)
+
+#### 🔬 Concepts Introduced:
+- **ETL**: Extract, Transform, Load — move and prep data from OLTP systems for analytics
+- **Staging**: Temporary raw data tables (landing zone)
+- **Snapshots**: Time-based reports (daily sales, monthly inventory)
+- **Fact Tables**: Core measurable business events (e.g. `FactSales`)
+- **Dimension Tables**: Lookup attributes (e.g. `DimCustomer`, `DimDate`)
+- **Incremental Loads**: Only pull new/changed records
+- **ETL Orchestration**: Schedule and log ETL jobs
+
+---
+
+#### 💼 Objectives:
+- Automate accurate reporting layers
+- Separate transaction from analytical processing
+- Design a scalable, auditable data warehouse
+
+---
+
+### 🧰 STAR SCHEMA OVERVIEW
+
+- `FactSales` → Transaction data (grain: Product + Day)
+- `DimCustomer`, `DimProduct`, `DimDate`, `DimRegion` → Lookup data
+
+```sql
+-- Sample DimDate Table
+CREATE TABLE DimDate (
+    DateId INT PRIMARY KEY,        -- Surrogate Key
+    FullDate DATE,
+    DayName VARCHAR(10),
+    MonthName VARCHAR(10),
+    Year INT,
+    Quarter INT
+);
+```
+
+```sql
+-- Sample Fact Table
+CREATE TABLE FactSales (
+    DateId INT,
+    ProductId INT,
+    CustomerId INT,
+    Quantity INT,
+    Revenue DECIMAL(18, 2),
+    FOREIGN KEY (DateId) REFERENCES DimDate(DateId),
+    FOREIGN KEY (ProductId) REFERENCES Products(ProductId),
+    FOREIGN KEY (CustomerId) REFERENCES Customers(CustomerId)
+);
+```
+
+---
+
+### 🔍 DAILY SALES SNAPSHOT EXAMPLE (WITH COMMENTS)
+
+```sql
+-- Capture daily revenue snapshot by product
+INSERT INTO FactSales (DateId, ProductId, CustomerId, Quantity, Revenue)
+SELECT 
+    CONVERT(INT, FORMAT(o.OrderDate, 'yyyyMMdd')) AS DateId,  -- Convert date to surrogate key format
+    p.ProductId,
+    o.CustomerId,
+    SUM(oi.Quantity),
+    SUM(oi.Quantity * oi.PriceAtPurchase)
+FROM Orders o
+JOIN OrderItems oi ON o.OrderId = oi.OrderId
+JOIN ProductVariants v ON oi.VariantId = v.VariantId
+JOIN Products p ON v.ProductId = p.ProductId
+WHERE o.OrderDate >= CAST(GETDATE() AS DATE)  -- Only today's data
+GROUP BY FORMAT(o.OrderDate, 'yyyyMMdd'), p.ProductId, o.CustomerId;
+```
+
+---
+
+### 🪧 ETL PIPELINE DESIGN (WITH STAGING & LOGGING)
+
+```sql
+-- 1. Create staging table (same structure as target)
+CREATE TABLE Staging_Orders (
+    OrderId INT,
+    CustomerId INT,
+    OrderDate DATETIME,
+    Status NVARCHAR(50)
+);
+
+-- 2. Load raw data from flat file or source
+-- Example: CSV Import with BULK INSERT
+BULK INSERT Staging_Orders
+FROM 'C:\Data\orders.csv'
+WITH (
+    FIELDTERMINATOR = ',',
+    ROWTERMINATOR = '\n',
+    FIRSTROW = 2
+);
+
+-- 3. Insert new records only into target
+INSERT INTO Orders (OrderId, CustomerId, OrderDate, Status)
+SELECT s.*
+FROM Staging_Orders s
+LEFT JOIN Orders o ON s.OrderId = o.OrderId
+WHERE o.OrderId IS NULL;
+
+-- 4. Clear staging
+TRUNCATE TABLE Staging_Orders;
+```
+
+---
+
+### ⏰ ETL LOGGING TABLES
+
+```sql
+-- Track ETL batch executions
+CREATE TABLE ETL_BatchLog (
+    BatchId INT IDENTITY PRIMARY KEY,
+    JobName VARCHAR(100),
+    StartTime DATETIME DEFAULT GETDATE(),
+    EndTime DATETIME,
+    Status VARCHAR(20),
+    RowsProcessed INT,
+    Notes VARCHAR(255)
+);
+```
+
+```sql
+-- Example usage (wrapped in stored procedure)
+DECLARE @Start DATETIME = GETDATE();
+-- ETL logic here...
+INSERT INTO ETL_BatchLog (JobName, EndTime, Status, RowsProcessed, Notes)
+VALUES ('DailySalesLoad', GETDATE(), 'Success', 1200, 'Snapshot loaded');
+```
+
+---
+
+### 🧵 INCREMENTAL LOADS
+
+```sql
+-- Load only new/modified records (Change Tracking or audit column)
+INSERT INTO FactSales (DateId, ProductId, CustomerId, Quantity, Revenue)
+SELECT 
+    DateId, ProductId, CustomerId, Quantity, Revenue
+FROM Staging_FactSales
+WHERE ModifiedAt > (SELECT MAX(ModifiedAt) FROM FactSales);
+```
+
+---
+
+### 🎯 ETL BEST PRACTICES
+- Use **TRY...CATCH** blocks and log exceptions
+- Avoid locking production tables — use staging
+- Always validate before final insert (e.g., CHECKSUM or row count)
+- Test incremental vs full load timings
+
+---
+
+
 
 
 
