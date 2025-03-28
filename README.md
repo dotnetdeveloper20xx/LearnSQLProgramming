@@ -784,6 +784,123 @@ WHERE TotalRevenue > 100; -- Filter low revenue accounts
 
 ---
 
+### 📈 Stage 7: Advanced Reporting & Dashboards
+
+#### 🔬 Skills Covered:
+- Materialized Views
+- Daily/Weekly/Monthly rollups
+- Pivot tables and cross-tab reports
+- View-based dashboard aggregation
+- Data transformation for analytics tools
+
+#### 💼 Objectives:
+- Create ready-to-use reporting layers
+- Support BI dashboards and export tools
+- Track time-based business trends
+
+#### 🔍 Example Reporting Queries (with comments):
+
+```sql
+-- Daily sales snapshot: revenue and total orders per day
+SELECT 
+    CAST(o.OrderDate AS DATE) AS OrderDate,                     -- Extract only the date part from datetime
+    COUNT(DISTINCT o.OrderId) AS TotalOrders,                   -- Count unique orders placed that day
+    SUM(oi.Quantity * oi.PriceAtPurchase) AS TotalRevenue       -- Sum of revenue for that day
+FROM Orders o
+JOIN OrderItems oi ON o.OrderId = oi.OrderId                   -- Join to get order details
+GROUP BY CAST(o.OrderDate AS DATE)                             -- Grouping daily
+ORDER BY OrderDate DESC;                                       -- Most recent days first
+
+-- Monthly revenue breakdown by product category
+SELECT 
+    FORMAT(o.OrderDate, 'yyyy-MM') AS Month,                   -- Format date into Year-Month for grouping
+    c.Name AS Category,                                        -- Category name from Products
+    SUM(oi.PriceAtPurchase * oi.Quantity) AS Revenue           -- Total revenue for that month and category
+FROM Orders o
+JOIN OrderItems oi ON o.OrderId = oi.OrderId
+JOIN ProductVariants v ON oi.VariantId = v.VariantId
+JOIN Products p ON v.ProductId = p.ProductId
+JOIN Categories c ON p.CategoryId = c.CategoryId
+GROUP BY FORMAT(o.OrderDate, 'yyyy-MM'), c.Name                -- Group by month and category
+ORDER BY Month, Revenue DESC;                                  -- Show highest revenue categories first each month
+
+-- Pivot Table: Count of order statuses over months
+SELECT *
+FROM (
+    SELECT 
+        FORMAT(OrderDate, 'yyyy-MM') AS Month,                  -- Convert to month format
+        Status                                                  -- Order status (e.g. Delivered, Pending)
+    FROM Orders
+) AS SourceTable
+PIVOT (
+    COUNT(Status)                                               -- Count how many of each status
+    FOR Status IN ([Pending], [Processing], [Shipped], [Delivered], [Cancelled])
+) AS PivotTable
+ORDER BY Month;
+
+-- Abandoned cart report: customers with no orders
+SELECT c.CustomerId, c.FullName, c.Email
+FROM Customers c
+LEFT JOIN Orders o ON c.CustomerId = o.CustomerId              -- LEFT JOIN to include customers even if no order
+WHERE o.OrderId IS NULL;                                       -- Keep only those with no matching order
+
+-- Regional revenue (assumes region column exists in Customers)
+SELECT c.Region, SUM(oi.PriceAtPurchase * oi.Quantity) AS Revenue
+FROM Customers c
+JOIN Orders o ON c.CustomerId = o.CustomerId
+JOIN OrderItems oi ON o.OrderId = oi.OrderId
+GROUP BY c.Region
+ORDER BY Revenue DESC;                                         -- Highest earning regions first
+```
+
+#### 📅 Materialized View Example (Indexed View)
+
+```sql
+-- Create a materialized view (indexed view) for daily product sales
+-- Used to speed up frequent reporting by pre-aggregating data
+CREATE VIEW vw_DailyProductSales
+WITH SCHEMABINDING                       -- Required for indexed views
+AS
+SELECT 
+    CAST(o.OrderDate AS DATE) AS SaleDate,     -- Daily grouping
+    p.ProductId,                               -- Product identifier
+    SUM(oi.Quantity * oi.PriceAtPurchase) AS Revenue, -- Daily revenue
+    COUNT_BIG(*) AS RecordCount               -- Required for indexed views
+FROM dbo.Orders o
+JOIN dbo.OrderItems oi ON o.OrderId = oi.OrderId
+JOIN dbo.ProductVariants v ON oi.VariantId = v.VariantId
+JOIN dbo.Products p ON v.ProductId = p.ProductId
+GROUP BY CAST(o.OrderDate AS DATE), p.ProductId; -- Must GROUP BY all columns not aggregated
+
+-- Materialize the view by creating a clustered index
+CREATE UNIQUE CLUSTERED INDEX IX_DailyProductSales
+ON vw_DailyProductSales (SaleDate, ProductId); -- Makes the view physically stored and faster to query
+```
+
+#### 🎯 Bonus Example: Weekly Active Customers Report
+```sql
+-- Count distinct customers placing orders each week
+SELECT 
+    DATEPART(YEAR, OrderDate) AS Year,                -- Extract year
+    DATEPART(WEEK, OrderDate) AS Week,                -- Extract week number
+    COUNT(DISTINCT CustomerId) AS ActiveCustomers     -- Unique customers placing orders that week
+FROM Orders
+GROUP BY DATEPART(YEAR, OrderDate), DATEPART(WEEK, OrderDate)
+ORDER BY Year DESC, Week DESC;
+```
+
+#### 🧵 What, Why, How
+- **What**: We are transforming transactional data into trends, summaries, and performance metrics.
+- **Why**: These insights help decision-makers evaluate KPIs like revenue, order volume, abandoned carts, etc.
+- **How**:
+  - Use `GROUP BY`, `FORMAT`, `PIVOT` to reshape data for trend analysis.
+  - Materialized views with indexed storage improve dashboard performance.
+  - LEFT JOIN + NULL check helps identify missing data (e.g., abandoned carts).
+
+---
+
+
+
 
 
 
