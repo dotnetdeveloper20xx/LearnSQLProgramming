@@ -5510,5 +5510,333 @@ END;
 **How**: DDL trigger + EVENTDATA.
 
 ---
+# ✅ Stage 11: ETL, SQL Jobs, Scheduling & Automation
+
+This stage covers:
+- ✅ Extract, Transform, Load (ETL) logic in SQL
+- ✅ SQL Server Agent Jobs
+- ✅ Scheduling and Alerts
+- ✅ Automating data flows and maintenance
+
+Each question includes:
+- Use case scenario
+- What, Why, and How explanation
+- SQL or T-SQL example with comments
+
+---
+
+### 1. Create a staging table for ETL
+```sql
+CREATE TABLE StagingOrders (
+    OrderId INT,
+    CustomerId INT,
+    OrderDate DATETIME,
+    Amount DECIMAL(10,2),
+    ImportBatchId UNIQUEIDENTIFIER DEFAULT NEWID()
+);
+```
+**What**: Temporary staging table.
+**Why**: Separate raw imports.
+**How**: Create a temp storage.
+
+---
+
+### 2. Insert data into staging from flat source
+```sql
+BULK INSERT StagingOrders
+FROM 'C:\Data\orders_2024.csv'
+WITH (
+    FIELDTERMINATOR = ',',
+    ROWTERMINATOR = '\n',
+    FIRSTROW = 2
+);
+```
+**What**: Load raw file.
+**Why**: Flat file integration.
+**How**: Use `BULK INSERT`.
+
+---
+
+### 3. Cleanse and transform staged data
+```sql
+UPDATE StagingOrders
+SET Amount = ISNULL(Amount, 0),
+    OrderDate = ISNULL(OrderDate, GETDATE());
+```
+**What**: Replace nulls.
+**Why**: Data consistency.
+**How**: `ISNULL` for null handling.
+
+---
+
+### 4. Insert from staging to production with filter
+```sql
+INSERT INTO Orders (OrderId, CustomerId, OrderDate, TotalAmount)
+SELECT OrderId, CustomerId, OrderDate, Amount
+FROM StagingOrders
+WHERE Amount > 0;
+```
+**What**: ETL load step.
+**Why**: Exclude invalid data.
+**How**: Filtered insert.
+
+---
+
+### 5. Create a stored procedure to automate ETL load
+```sql
+CREATE PROCEDURE sp_Load_Orders_From_Staging
+AS
+BEGIN
+    DELETE FROM OrdersBackup;
+    INSERT INTO OrdersBackup SELECT * FROM Orders;
+
+    INSERT INTO Orders (OrderId, CustomerId, OrderDate, TotalAmount)
+    SELECT OrderId, CustomerId, OrderDate, Amount
+    FROM StagingOrders;
+
+    DELETE FROM StagingOrders;
+END;
+```
+**What**: Encapsulated ETL logic.
+**Why**: Reusability.
+**How**: Procedure with staging.
+
+---
+
+### 6. Create SQL Server Agent job to call ETL proc
+```sql
+-- Use SSMS GUI or script:
+-- Job Step: EXEC sp_Load_Orders_From_Staging
+```
+**What**: Scheduled ETL.
+**Why**: Automation.
+**How**: Agent job runs stored proc.
+
+---
+
+### 7. Schedule job to run daily at 2 AM
+```sql
+-- In SQL Agent: create a new schedule
+-- Frequency: Recurring, Daily
+-- Time: 02:00 AM
+```
+**What**: Automate execution.
+**Why**: Nightly batch.
+**How**: SQL Server Agent schedule.
+
+---
+
+### 8. Archive old orders to history table
+```sql
+INSERT INTO OrdersHistory
+SELECT * FROM Orders WHERE OrderDate < DATEADD(YEAR, -2, GETDATE());
+
+DELETE FROM Orders WHERE OrderDate < DATEADD(YEAR, -2, GETDATE());
+```
+**What**: Archive data.
+**Why**: Keep DB lean.
+**How**: Insert + delete.
+
+---
+
+### 9. Log ETL run start and end times
+```sql
+INSERT INTO ETLLog (Step, RunTime)
+VALUES ('Start Load', GETDATE());
+-- ETL Logic Here
+INSERT INTO ETLLog (Step, RunTime)
+VALUES ('End Load', GETDATE());
+```
+**What**: ETL tracking.
+**Why**: Debug and audit.
+**How**: Log time.
+
+---
+
+### 10. Handle duplicate rows using ROW_NUMBER()
+```sql
+WITH CTE AS (
+  SELECT *,
+         ROW_NUMBER() OVER (PARTITION BY OrderId ORDER BY OrderDate DESC) AS rn
+  FROM StagingOrders
+)
+DELETE FROM CTE WHERE rn > 1;
+```
+**What**: Deduplication.
+**Why**: Avoid key violations.
+**How**: Use window function.
+
+---
+
+### 11. Truncate staging after successful ETL
+```sql
+TRUNCATE TABLE StagingOrders;
+```
+**What**: Cleanup.
+**Why**: Reset for next batch.
+**How**: Fast truncate.
+
+---
+
+### 12. Log failed records to error table
+```sql
+INSERT INTO ETLErrorLog
+SELECT * FROM StagingOrders WHERE Amount IS NULL;
+```
+**What**: Capture bad data.
+**Why**: Investigate failures.
+**How**: Conditional insert.
+
+---
+
+### 13. Send email alert if ETL fails
+```sql
+-- In Agent Job: configure notification on failure to send operator email
+```
+**What**: Alert system.
+**Why**: Reliability.
+**How**: Agent notifications.
+
+---
+
+### 14. Generate audit summary of ETL batch
+```sql
+SELECT COUNT(*) AS TotalRows, MAX(OrderDate) AS LatestOrder
+FROM StagingOrders;
+```
+**What**: Batch overview.
+**Why**: Summary report.
+**How**: Aggregation query.
+
+---
+
+### 15. Use TRY_CAST() to validate data
+```sql
+SELECT * FROM StagingOrders
+WHERE TRY_CAST(OrderDate AS DATETIME) IS NULL;
+```
+**What**: Validate types.
+**Why**: Prevent errors.
+**How**: TRY_CAST.
+
+---
+
+### 16. Transform using CASE statement
+```sql
+SELECT *,
+       CASE WHEN Amount > 1000 THEN 'High' ELSE 'Normal' END AS Priority
+FROM StagingOrders;
+```
+**What**: Business logic.
+**Why**: Flag importance.
+**How**: CASE transformation.
+
+---
+
+### 17. Create a job that rebuilds indexes monthly
+```sql
+-- In Agent: Job step to run:
+EXEC sp_MSforeachtable 'ALTER INDEX ALL ON ? REBUILD';
+```
+**What**: Maintenance.
+**Why**: Performance.
+**How**: Scheduled SQL Agent job.
+
+---
+
+### 18. Purge logs older than 30 days
+```sql
+DELETE FROM ETLLog WHERE RunTime < DATEADD(DAY, -30, GETDATE());
+```
+**What**: Retention policy.
+**Why**: Keep logs lean.
+**How**: Date filter delete.
+
+---
+
+### 19. Detect failed rows during bulk insert
+```sql
+-- Use ERRORFILE option to redirect errors:
+BULK INSERT StagingOrders
+FROM 'C:\orders.csv'
+WITH (ERRORFILE = 'C:\errors.txt');
+```
+**What**: Debug failures.
+**Why**: Understand load issues.
+**How**: ERRORFILE output.
+
+---
+
+### 20. Monitor job status from msdb
+```sql
+SELECT job.name, h.run_date, h.run_status
+FROM msdb.dbo.sysjobs job
+JOIN msdb.dbo.sysjobhistory h ON job.job_id = h.job_id;
+```
+**What**: Job result.
+**Why**: Status tracking.
+**How**: msdb system tables.
+
+---
+
+### 21. Track row-level ETL changes
+```sql
+SELECT OrderId, ChangeType, ChangedAt
+FROM ETLChangeLog
+WHERE ChangedAt >= CAST(GETDATE() AS DATE);
+```
+**What**: Auditing changes.
+**Why**: Compliance.
+**How**: Change log query.
+
+---
+
+### 22. Retry failed ETL batch
+```sql
+EXEC sp_Load_Orders_From_Staging;
+-- After fixing bad data
+```
+**What**: Recovery step.
+**Why**: Fault tolerance.
+**How**: Manual retry.
+
+---
+
+### 23. Partition large ETL loads by date
+```sql
+SELECT * FROM StagingOrders
+WHERE OrderDate BETWEEN '2024-01-01' AND '2024-01-31';
+```
+**What**: Chunk data.
+**Why**: Manageable loads.
+**How**: Date filtering.
+
+---
+
+### 24. Use temp table in ETL for intermediate result
+```sql
+SELECT * INTO #FilteredOrders
+FROM StagingOrders
+WHERE Amount > 0;
+```
+**What**: Staging temp data.
+**Why**: Intermediate transformation.
+**How**: SELECT INTO temp table.
+
+---
+
+### 25. Build a summary table for reporting
+```sql
+SELECT CustomerId, COUNT(*) AS TotalOrders, SUM(Amount) AS TotalAmount
+INTO OrderSummary
+FROM Orders
+GROUP BY CustomerId;
+```
+**What**: Final load product.
+**Why**: Reporting performance.
+**How**: Aggregate summary table.
+
+---
+
 
 
