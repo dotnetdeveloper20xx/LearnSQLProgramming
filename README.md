@@ -143,6 +143,138 @@ A complete **SQL Enterprise e-Commerce Engine** including:
 
 ---
 
-**Stage 1: Designing the Schema and Creating Core Tables**
+
+### ✅ Stage 1: Foundation – Core Tables and Data Modeling
+
+#### 🔬 Skills Covered:
+- SQL Syntax: `CREATE TABLE`, `PRIMARY KEY`, `FOREIGN KEY`, `NOT NULL`, `UNIQUE`, `CHECK`
+- Understanding data types (e.g., `INT`, `VARCHAR`, `DECIMAL`, `DATETIME`)
+- Entity Relationship Design (ERD)
+
+#### 💼 Objectives:
+- Design and create the foundational schema for the e-commerce platform.
+- Normalize the schema to remove redundancy and enforce data integrity.
+- Insert sample data for querying.
+
+#### 📄 Tables to Create:
+1. `Customers`
+2. `Categories`
+3. `Products`
+4. `ProductVariants`
+5. `Orders`
+6. `OrderItems`
+
+#### ⚖️ Table Definitions:
+
+```sql
+CREATE TABLE Customers (
+    CustomerId INT PRIMARY KEY IDENTITY,
+    FullName NVARCHAR(100) NOT NULL,
+    Email NVARCHAR(100) UNIQUE NOT NULL,
+    Phone NVARCHAR(20),
+    CreatedAt DATETIME DEFAULT GETDATE()
+);
+
+CREATE TABLE Categories (
+    CategoryId INT PRIMARY KEY IDENTITY,
+    Name NVARCHAR(100) NOT NULL,
+    Description NVARCHAR(255)
+);
+
+CREATE TABLE Products (
+    ProductId INT PRIMARY KEY IDENTITY,
+    CategoryId INT NOT NULL,
+    Name NVARCHAR(100) NOT NULL,
+    Description NVARCHAR(255),
+    Price DECIMAL(10, 2) NOT NULL,
+    FOREIGN KEY (CategoryId) REFERENCES Categories(CategoryId)
+);
+
+CREATE TABLE ProductVariants (
+    VariantId INT PRIMARY KEY IDENTITY,
+    ProductId INT NOT NULL,
+    SKU NVARCHAR(50) UNIQUE NOT NULL,
+    Color NVARCHAR(50),
+    Size NVARCHAR(20),
+    StockQuantity INT NOT NULL,
+    FOREIGN KEY (ProductId) REFERENCES Products(ProductId)
+);
+
+CREATE TABLE Orders (
+    OrderId INT PRIMARY KEY IDENTITY,
+    CustomerId INT NOT NULL,
+    OrderDate DATETIME DEFAULT GETDATE(),
+    Status NVARCHAR(50) DEFAULT 'Pending',
+    FOREIGN KEY (CustomerId) REFERENCES Customers(CustomerId)
+);
+
+CREATE TABLE OrderItems (
+    OrderItemId INT PRIMARY KEY IDENTITY,
+    OrderId INT NOT NULL,
+    VariantId INT NOT NULL,
+    Quantity INT NOT NULL,
+    PriceAtPurchase DECIMAL(10, 2) NOT NULL,
+    FOREIGN KEY (OrderId) REFERENCES Orders(OrderId),
+    FOREIGN KEY (VariantId) REFERENCES ProductVariants(VariantId)
+);
+```
+
+#### 🧵 What, Why, How
+- **What**: `Products`, `Customers`, `Orders` are fundamental entities in any e-commerce.
+- **Why**: Normalized design improves data integrity, reduces redundancy.
+- **How**: Use `FOREIGN KEY` to link related entities and ensure relational consistency.
+
+#### 🔍 Sample Queries:
+
+```sql
+-- Get all customers
+SELECT * FROM Customers;
+
+-- Get all products under a specific category
+SELECT p.* FROM Products p
+JOIN Categories c ON p.CategoryId = c.CategoryId
+WHERE c.Name = 'Electronics';
+
+-- Get customer orders
+SELECT o.* FROM Orders o
+JOIN Customers c ON o.CustomerId = c.CustomerId
+WHERE c.FullName = 'John Doe';
+
+-- Get all variants for a product
+SELECT v.* FROM ProductVariants v
+JOIN Products p ON v.ProductId = p.ProductId
+WHERE p.Name = 'Smartphone';
+
+-- List all order items for a given customer
+SELECT oi.*, p.Name AS ProductName, v.Color, v.Size
+FROM OrderItems oi
+JOIN Orders o ON oi.OrderId = o.OrderId
+JOIN ProductVariants v ON oi.VariantId = v.VariantId
+JOIN Products p ON v.ProductId = p.ProductId
+WHERE o.CustomerId = 1;
+
+-- Check stock availability for all products
+SELECT p.Name, v.Color, v.Size, v.StockQuantity
+FROM ProductVariants v
+JOIN Products p ON v.ProductId = p.ProductId
+WHERE v.StockQuantity > 0;
+
+-- Orders placed within the last 30 days
+SELECT * FROM Orders
+WHERE OrderDate >= DATEADD(DAY, -30, GETDATE());
+
+-- Products with no stock left
+SELECT p.Name, v.Color, v.Size
+FROM ProductVariants v
+JOIN Products p ON v.ProductId = p.ProductId
+WHERE v.StockQuantity = 0;
+```
+
+---
+
+
+
+
+
 
 
