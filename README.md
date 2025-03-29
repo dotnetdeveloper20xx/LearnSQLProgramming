@@ -6885,5 +6885,375 @@ SELECT * FROM vw_TopProducts;
 
 ---
 
+## ✅ Stage 15: Capstone SQL Mastery Review & Project Challenge
+
+This stage is the grand finale of your SQL Mastery journey. It includes:
+- ✅ Cumulative knowledge application
+- ✅ Real-world business reporting problems
+- ✅ Optimization, tuning, refactoring
+- ✅ Data modeling and integrity enforcement
+
+Each challenge includes:
+- Business case
+- What, Why, and How explanation
+- Fully commented SQL query
+
+---
+
+### 1. Generate customer purchase history report
+```sql
+SELECT c.CustomerId, c.Name, o.OrderId, o.OrderDate, SUM(oi.Quantity * oi.PriceAtPurchase) AS Total
+FROM Customers c
+JOIN Orders o ON c.CustomerId = o.CustomerId
+JOIN OrderItems oi ON o.OrderId = oi.OrderId
+GROUP BY c.CustomerId, c.Name, o.OrderId, o.OrderDate;
+```
+- **What**: Detailed purchase record.
+- **Why**: For customer behavior insights.
+- **How**: Joins + grouping + aggregation.
+
+---
+
+### 2. Find top 5 selling products last month
+```sql
+SELECT TOP 5 p.ProductName, SUM(oi.Quantity) AS TotalSold
+FROM Products p
+JOIN OrderItems oi ON p.ProductId = oi.ProductId
+JOIN Orders o ON o.OrderId = oi.OrderId
+WHERE o.OrderDate BETWEEN DATEADD(MONTH, -1, GETDATE()) AND GETDATE()
+GROUP BY p.ProductName
+ORDER BY TotalSold DESC;
+```
+- **What**: Hot product ranking.
+- **Why**: Inventory planning.
+- **How**: Filter + JOIN + GROUP + ORDER.
+
+---
+
+### 3. Show customer lifetime value
+```sql
+SELECT CustomerId, SUM(TotalAmount) AS LifetimeValue
+FROM Orders
+GROUP BY CustomerId;
+```
+- **What**: Total spend.
+- **Why**: Loyalty tracking.
+- **How**: Simple group + sum.
+
+---
+
+### 4. Detect customers with no orders
+```sql
+SELECT c.CustomerId, c.Name
+FROM Customers c
+LEFT JOIN Orders o ON c.CustomerId = o.CustomerId
+WHERE o.OrderId IS NULL;
+```
+- **What**: Inactive customers.
+- **Why**: Retargeting.
+- **How**: `LEFT JOIN` + `IS NULL`.
+
+---
+
+### 5. Identify revenue drop by comparing months
+```sql
+SELECT 
+    FORMAT(OrderDate, 'yyyy-MM') AS OrderMonth,
+    SUM(TotalAmount) AS Revenue,
+    LAG(SUM(TotalAmount)) OVER (ORDER BY FORMAT(OrderDate, 'yyyy-MM')) AS PreviousMonthRevenue
+FROM Orders
+GROUP BY FORMAT(OrderDate, 'yyyy-MM');
+```
+- **What**: Month-on-month change.
+- **Why**: Trend analysis.
+- **How**: `LAG()` function.
+
+---
+
+### 6. Find customers who placed multiple orders on the same day
+```sql
+SELECT CustomerId, OrderDate, COUNT(*) AS OrderCount
+FROM Orders
+GROUP BY CustomerId, OrderDate
+HAVING COUNT(*) > 1;
+```
+- **What**: Repeated orders.
+- **Why**: Flag duplicates or VIPs.
+- **How**: `HAVING` with `COUNT`.
+
+---
+
+### 7. Display top 3 revenue-generating customers
+```sql
+SELECT TOP 3 CustomerId, SUM(TotalAmount) AS Revenue
+FROM Orders
+GROUP BY CustomerId
+ORDER BY Revenue DESC;
+```
+- **What**: Identify top customers.
+- **Why**: VIP targeting.
+- **How**: Sort & limit.
+
+---
+
+### 8. Calculate average order value by customer
+```sql
+SELECT CustomerId, AVG(TotalAmount) AS AvgOrderValue
+FROM Orders
+GROUP BY CustomerId;
+```
+- **What**: Per-order value.
+- **Why**: Customer segmentation.
+- **How**: `AVG()`.
+
+---
+
+### 9. Count distinct products per order
+```sql
+SELECT OrderId, COUNT(DISTINCT ProductId) AS UniqueProducts
+FROM OrderItems
+GROUP BY OrderId;
+```
+- **What**: Basket diversity.
+- **Why**: Upselling insights.
+- **How**: `COUNT DISTINCT`.
+
+---
+
+### 10. Use CTE to summarize daily revenue
+```sql
+WITH DailyRevenue AS (
+    SELECT CAST(OrderDate AS DATE) AS Day, SUM(TotalAmount) AS Revenue
+    FROM Orders
+    GROUP BY CAST(OrderDate AS DATE)
+)
+SELECT * FROM DailyRevenue;
+```
+- **What**: Daily report.
+- **Why**: Operational summary.
+- **How**: CTE for modularity.
+
+---
+
+### 11. Detect missing orders (gap in sequence)
+```sql
+SELECT OrderId
+FROM Orders o
+WHERE NOT EXISTS (
+    SELECT 1 FROM Orders o2 WHERE o2.OrderId = o.OrderId + 1
+);
+```
+- **What**: Gaps in IDs.
+- **Why**: Data integrity.
+- **How**: `NOT EXISTS`.
+
+---
+
+### 12. Find orders exceeding category average spend
+```sql
+SELECT o.OrderId, o.TotalAmount, p.CategoryId
+FROM Orders o
+JOIN OrderItems oi ON o.OrderId = oi.OrderId
+JOIN Products p ON oi.ProductId = p.ProductId
+WHERE o.TotalAmount > (
+    SELECT AVG(o2.TotalAmount)
+    FROM Orders o2
+    JOIN OrderItems oi2 ON o2.OrderId = oi2.OrderId
+    JOIN Products p2 ON oi2.ProductId = p2.ProductId
+    WHERE p2.CategoryId = p.CategoryId
+);
+```
+- **What**: Outliers.
+- **Why**: Big-spender detection.
+- **How**: Correlated subquery.
+
+---
+
+### 13. Pivot monthly product sales using PIVOT
+```sql
+SELECT *
+FROM (
+    SELECT ProductId, FORMAT(OrderDate, 'MMM') AS MonthName, Quantity
+    FROM OrderItems oi
+    JOIN Orders o ON o.OrderId = oi.OrderId
+) src
+PIVOT (
+    SUM(Quantity) FOR MonthName IN ([Jan], [Feb], [Mar], [Apr], [May])
+) pvt;
+```
+- **What**: Pivot table.
+- **Why**: Dashboard charts.
+- **How**: `PIVOT`.
+
+---
+
+### 14. Use window function to rank customers
+```sql
+SELECT CustomerId, SUM(TotalAmount) AS Revenue,
+       RANK() OVER (ORDER BY SUM(TotalAmount) DESC) AS CustomerRank
+FROM Orders
+GROUP BY CustomerId;
+```
+- **What**: Leaderboard.
+- **Why**: Recognize top clients.
+- **How**: Window + `RANK()`.
+
+---
+
+### 15. Use CASE for conditional labels
+```sql
+SELECT ProductId, ProductName,
+       CASE 
+           WHEN Price > 1000 THEN 'Premium'
+           WHEN Price > 500 THEN 'Standard'
+           ELSE 'Budget'
+       END AS Category
+FROM Products;
+```
+- **What**: Tiering.
+- **Why**: Classification.
+- **How**: `CASE` logic.
+
+---
+
+### 16. Write a trigger to log order updates
+```sql
+CREATE TRIGGER trg_LogOrderUpdate
+ON Orders
+AFTER UPDATE
+AS
+INSERT INTO OrderAudit (OrderId, ModifiedAt)
+SELECT i.OrderId, GETDATE() FROM inserted i;
+```
+- **What**: Log updates.
+- **Why**: Change tracking.
+- **How**: `AFTER UPDATE` trigger.
+
+---
+
+### 17. Use JSON to output order details
+```sql
+SELECT OrderId, CustomerId, OrderDate,
+       (SELECT ProductId, Quantity
+        FROM OrderItems WHERE OrderId = o.OrderId
+        FOR JSON PATH) AS ItemsJson
+FROM Orders o;
+```
+- **What**: JSON structure.
+- **Why**: API-ready response.
+- **How**: `FOR JSON PATH`.
+
+---
+
+### 18. Track stock status using derived column
+```sql
+SELECT ProductId, ProductName, QuantityAvailable,
+       CASE WHEN QuantityAvailable = 0 THEN 'Out of Stock'
+            WHEN QuantityAvailable < 10 THEN 'Low Stock'
+            ELSE 'In Stock' END AS StockStatus
+FROM Inventory;
+```
+- **What**: Inventory insight.
+- **Why**: Restocking alerts.
+- **How**: CASE expression.
+
+---
+
+### 19. Use CROSS APPLY to fetch latest order per customer
+```sql
+SELECT c.CustomerId, c.Name, o.OrderId, o.OrderDate
+FROM Customers c
+CROSS APPLY (
+    SELECT TOP 1 * FROM Orders o
+    WHERE o.CustomerId = c.CustomerId
+    ORDER BY o.OrderDate DESC
+) o;
+```
+- **What**: Lateral join.
+- **Why**: One-to-many filtering.
+- **How**: `CROSS APPLY`.
+
+---
+
+### 20. Create a view for dashboard summary
+```sql
+CREATE VIEW vw_DashboardSummary AS
+SELECT COUNT(*) AS TotalOrders,
+       SUM(TotalAmount) AS TotalRevenue,
+       COUNT(DISTINCT CustomerId) AS ActiveCustomers
+FROM Orders;
+```
+- **What**: Aggregated stats.
+- **Why**: Instant overview.
+- **How**: VIEW abstraction.
+
+---
+
+### 21. Use CTE to get orders above average
+```sql
+WITH OrderAverages AS (
+    SELECT AVG(TotalAmount) AS AvgOrderValue FROM Orders
+)
+SELECT * FROM Orders
+WHERE TotalAmount > (SELECT AvgOrderValue FROM OrderAverages);
+```
+- **What**: Above average spenders.
+- **Why**: Outlier detection.
+- **How**: Modular CTE.
+
+---
+
+### 22. Archive old orders to history table
+```sql
+INSERT INTO OrderHistory
+SELECT * FROM Orders WHERE OrderDate < DATEADD(YEAR, -2, GETDATE());
+DELETE FROM Orders WHERE OrderDate < DATEADD(YEAR, -2, GETDATE());
+```
+- **What**: Archiving.
+- **Why**: DB performance.
+- **How**: Insert + delete.
+
+---
+
+### 23. Detect frequent returners (customers with >2 refunds)
+```sql
+SELECT CustomerId, COUNT(*) AS RefundCount
+FROM Refunds
+GROUP BY CustomerId
+HAVING COUNT(*) > 2;
+```
+- **What**: High-return customers.
+- **Why**: Fraud prevention.
+- **How**: GROUP + HAVING.
+
+---
+
+### 24. Optimize query using covering index
+```sql
+-- Create index for common query pattern
+CREATE NONCLUSTERED INDEX idx_Orders_Customer_Date
+ON Orders (CustomerId, OrderDate) INCLUDE (TotalAmount);
+```
+- **What**: Faster reads.
+- **Why**: Index tuning.
+- **How**: `INCLUDE` clause.
+
+---
+
+### 25. Generate summary export using TEMP table
+```sql
+SELECT CustomerId, SUM(TotalAmount) AS TotalSpent
+INTO #CustomerSummary
+FROM Orders
+GROUP BY CustomerId;
+
+SELECT * FROM #CustomerSummary;
+```
+- **What**: Temp summary table.
+- **Why**: Export/report.
+- **How**: `SELECT INTO` temp table.
+
+---
+
 
 
