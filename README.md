@@ -643,7 +643,122 @@ LAST_VALUE(Salary) OVER (PARTITION BY Dept ORDER BY Salary ASC ROWS BETWEEN UNBO
 | `FIRST_VALUE()`  | First value in partition                    | Top scorer in your class                   |
 | `LAST_VALUE()`   | Last value in partition                     | Most recent entry in group                 |
 
+
+# 🧠 SQL Window Functions Deep Dive
+
+## 👨‍💼 Example Table: Employees
+
+| EmpId | Name   | Dept | Salary |
+|-------|--------|------|--------|
+| 1     | Alice  | HR   | 3000   |
+| 2     | Bob    | HR   | 5000   |
+| 3     | Carol  | HR   | 4000   |
+| 4     | Dan    | IT   | 7000   |
+| 5     | Erin   | IT   | 6000   |
+
 ---
+
+## 🎯 Goal: Show Highest Paid Employee Per Department on Every Row
+
+### ✅ Using `LAST_VALUE` with FULL Frame
+```sql
+SELECT Name, Dept, Salary,
+  LAST_VALUE(Name) OVER (
+    PARTITION BY Dept
+    ORDER BY Salary ASC
+    ROWS BETWEEN UNBOUNDED PRECEDING AND UNBOUNDED FOLLOWING
+  ) AS HighestPaidEmployee
+FROM Employees;
+```
+- Sorts by Salary ASC, last row = highest salary
+- Full frame ensures all rows in partition are visible
+
+---
+
+### ✅ Using `FIRST_VALUE` with DESC Order
+```sql
+SELECT Name, Dept, Salary,
+  FIRST_VALUE(Name) OVER (
+    PARTITION BY Dept
+    ORDER BY Salary DESC
+  ) AS HighestPaidEmployee
+FROM Employees;
+```
+- Sorts salaries descending
+- Picks the first name = highest-paid person
+
+---
+
+### ✅ Using `MAX()` as a Window Function
+```sql
+SELECT Name, Dept, Salary,
+  MAX(Salary) OVER (PARTITION BY Dept) AS HighestSalary
+FROM Employees;
+```
+- Returns the highest salary per department
+
+---
+
+### ✅ Using `RANK()` to Find Position
+```sql
+SELECT Name, Dept, Salary,
+  RANK() OVER (PARTITION BY Dept ORDER BY Salary DESC) AS SalaryRank
+FROM Employees;
+```
+- Ranks employees from highest to lowest salary
+- `RANK = 1` means top earners in each department
+
+---
+
+## 📦 Combine: Show Highest Paid Name and Salary Per Row
+```sql
+SELECT Name, Dept, Salary,
+  FIRST_VALUE(Name) OVER (PARTITION BY Dept ORDER BY Salary DESC) AS HighestPaidName,
+  MAX(Salary) OVER (PARTITION BY Dept) AS HighestSalary
+FROM Employees;
+```
+
+---
+
+## 💼 Real-World Use Cases
+
+| Goal                                    | Use This                                                                 |
+|-----------------------------------------|--------------------------------------------------------------------------|
+| Highest salary per department           | `MAX(Salary) OVER (PARTITION BY Dept)`                                   |
+| Name of top earner per department       | `FIRST_VALUE(Name) OVER (PARTITION BY Dept ORDER BY Salary DESC)`        |
+| Top N earners                           | `RANK()` or `DENSE_RANK()`                                               |
+| Lowest salary employee per department   | `FIRST_VALUE(Name) OVER (PARTITION BY Dept ORDER BY Salary ASC)`         |
+| Second-highest salary                   | Use `RANK()` and filter where `RANK = 2`                                 |
+
+---
+
+## 🚀 Bonus: Filter Just the Top Earners in Each Department
+```sql
+WITH RankedSalaries AS (
+  SELECT *,
+         RANK() OVER (PARTITION BY Dept ORDER BY Salary DESC) AS SalaryRank
+  FROM Employees
+)
+SELECT *
+FROM RankedSalaries
+WHERE SalaryRank = 1;
+```
+
+---
+
+## ✅ Summary of Functions
+
+| Function       | Purpose                                                       |
+|----------------|---------------------------------------------------------------|
+| `LAST_VALUE()` | Gets last value in a window (frame must be explicitly set)    |
+| `FIRST_VALUE()`| Gets first value in a sorted window                           |
+| `MAX()`        | Gets the maximum value in a partition                         |
+| `RANK()`       | Ranks rows with ties (skips numbers)                          |
+| `ROW_NUMBER()` | Gives unique row numbers per partition/order                  |
+| `DENSE_RANK()` | Ranks rows with ties (no skipped numbers)                    |
+
+---
+
 
 ### 🔄 Stage 5: CTEs, Recursion & Pagination
 
