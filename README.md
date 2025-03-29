@@ -7255,5 +7255,267 @@ SELECT * FROM #CustomerSummary;
 
 ---
 
+## 🧠 SQL Mastery Final Mock Exam –  Questions & Answers with Commentary
+
+### ✅ Question 21: Show order totals with discount applied
+```sql
+-- Calculate 10% discount if total > 1000
+SELECT OrderId, TotalAmount,
+       CASE WHEN TotalAmount > 1000 THEN TotalAmount * 0.9 ELSE TotalAmount END AS DiscountedTotal
+FROM Orders;
+```
+
+### ✅ Question 22: Customers with multiple shipping addresses
+```sql
+SELECT CustomerId, COUNT(*) AS AddressCount
+FROM Addresses
+GROUP BY CustomerId
+HAVING COUNT(*) > 1;
+```
+
+### ✅ Question 23: Get average delivery time
+```sql
+-- Use DATEDIFF between OrderDate and DeliveredDate
+SELECT AVG(DATEDIFF(DAY, OrderDate, DeliveredDate)) AS AvgDeliveryDays
+FROM Orders
+WHERE DeliveredDate IS NOT NULL;
+```
+
+### ✅ Question 24: Find orders not delivered within 5 days
+```sql
+SELECT *
+FROM Orders
+WHERE DATEDIFF(DAY, OrderDate, DeliveredDate) > 5;
+```
+
+### ✅ Question 25: Most popular product per category
+```sql
+SELECT CategoryId, ProductId, TotalSold
+FROM (
+  SELECT p.CategoryId, oi.ProductId, SUM(oi.Quantity) AS TotalSold,
+         RANK() OVER (PARTITION BY p.CategoryId ORDER BY SUM(oi.Quantity) DESC) AS rk
+  FROM Products p
+  JOIN OrderItems oi ON p.ProductId = oi.ProductId
+  GROUP BY p.CategoryId, oi.ProductId
+) a
+WHERE rk = 1;
+```
+
+### ✅ Question 26: Create a simple stored procedure
+```sql
+CREATE PROCEDURE sp_GetCustomerOrders @CustomerId INT
+AS
+BEGIN
+    SELECT * FROM Orders WHERE CustomerId = @CustomerId;
+END;
+```
+
+### ✅ Question 27: Add an AFTER INSERT trigger
+```sql
+CREATE TRIGGER trg_NewOrderLog
+ON Orders
+AFTER INSERT
+AS
+BEGIN
+    INSERT INTO OrderLog (OrderId, LoggedAt)
+    SELECT OrderId, GETDATE() FROM inserted;
+END;
+```
+
+### ✅ Question 28: Rebuild indexes on all tables
+```sql
+EXEC sp_MSforeachtable 'ALTER INDEX ALL ON ? REBUILD';
+```
+
+### ✅ Question 29: Use TRY_CAST to handle conversion safely
+```sql
+SELECT * FROM Orders
+WHERE TRY_CAST(OrderDate AS DATETIME) IS NOT NULL;
+```
+
+### ✅ Question 30: Log SQL errors using TRY/CATCH
+```sql
+BEGIN TRY
+    -- Risky operation
+    DELETE FROM Orders WHERE OrderId = -999;
+END TRY
+BEGIN CATCH
+    INSERT INTO ErrorLog (Message, ErrorDate)
+    VALUES (ERROR_MESSAGE(), GETDATE());
+END CATCH;
+```
+
+### ✅ Question 31: Find 5 most recent orders per customer
+```sql
+SELECT * FROM (
+  SELECT *, ROW_NUMBER() OVER (PARTITION BY CustomerId ORDER BY OrderDate DESC) AS rn
+  FROM Orders
+) a
+WHERE rn <= 5;
+```
+
+### ✅ Question 32: Detect gaps in identity column
+```sql
+SELECT Id + 1 AS MissingFrom
+FROM Orders o
+WHERE NOT EXISTS (SELECT 1 FROM Orders o2 WHERE o2.Id = o.Id + 1);
+```
+
+### ✅ Question 33: Check for SARGable WHERE clause
+```sql
+-- GOOD (SARGable)
+SELECT * FROM Orders WHERE OrderDate >= '2024-01-01';
+-- BAD (Not SARGable)
+-- SELECT * FROM Orders WHERE YEAR(OrderDate) = 2024;
+```
+
+### ✅ Question 34: Count active customers (ordered this year)
+```sql
+SELECT COUNT(DISTINCT CustomerId)
+FROM Orders
+WHERE YEAR(OrderDate) = YEAR(GETDATE());
+```
+
+### ✅ Question 35: Dynamic SQL to select from table
+```sql
+DECLARE @TableName NVARCHAR(100) = 'Orders';
+EXEC('SELECT TOP 10 * FROM ' + @TableName);
+```
+
+### ✅ Question 36: Transactions with rollback on error
+```sql
+BEGIN TRAN;
+BEGIN TRY
+    UPDATE Products SET Price = Price + 5;
+    COMMIT;
+END TRY
+BEGIN CATCH
+    ROLLBACK;
+    PRINT 'Error: ' + ERROR_MESSAGE();
+END CATCH;
+```
+
+### ✅ Question 37: Use COALESCE to fill NULLs
+```sql
+SELECT CustomerId, COALESCE(Phone, 'No Phone') AS ContactPhone
+FROM Customers;
+```
+
+### ✅ Question 38: Recursive CTE for hierarchy
+```sql
+WITH CategoryCTE AS (
+    SELECT CategoryId, CategoryName, ParentId
+    FROM Categories
+    WHERE ParentId IS NULL
+    UNION ALL
+    SELECT c.CategoryId, c.CategoryName, c.ParentId
+    FROM Categories c
+    JOIN CategoryCTE ct ON c.ParentId = ct.CategoryId
+)
+SELECT * FROM CategoryCTE;
+```
+
+### ✅ Question 39: Apply row-level security via view
+```sql
+CREATE VIEW vw_OrdersLimited AS
+SELECT * FROM Orders WHERE Region = SYSTEM_USER();
+```
+
+### ✅ Question 40: Use APPLY to get last order for each customer
+```sql
+SELECT c.CustomerId, c.Name, o.OrderId, o.OrderDate
+FROM Customers c
+CROSS APPLY (
+  SELECT TOP 1 * FROM Orders o
+  WHERE o.CustomerId = c.CustomerId
+  ORDER BY o.OrderDate DESC
+) o;
+```
+
+### ✅ Question 41: Use EXCEPT to find unmatched rows
+```sql
+SELECT ProductId FROM Products
+EXCEPT
+SELECT DISTINCT ProductId FROM OrderItems;
+```
+
+### ✅ Question 42: Common error – invalid GROUP BY
+```sql
+-- This fails:
+-- SELECT CustomerId, OrderDate FROM Orders GROUP BY CustomerId;
+-- FIX: All selected columns must be in GROUP BY or aggregates
+SELECT CustomerId, MAX(OrderDate) FROM Orders GROUP BY CustomerId;
+```
+
+### ✅ Question 43: Create a filtered index
+```sql
+CREATE INDEX idx_ActiveProducts ON Products(ProductName)
+WHERE IsActive = 1;
+```
+
+### ✅ Question 44: Use indexed view with SCHEMABINDING
+```sql
+CREATE VIEW vw_CategorySales
+WITH SCHEMABINDING
+AS
+SELECT p.CategoryId, SUM(oi.Quantity) AS TotalQty
+FROM dbo.Products p
+JOIN dbo.OrderItems oi ON p.ProductId = oi.ProductId
+GROUP BY p.CategoryId;
+GO
+CREATE UNIQUE CLUSTERED INDEX idx_CategorySales ON vw_CategorySales (CategoryId);
+```
+
+### ✅ Question 45: UNION vs UNION ALL
+```sql
+-- UNION removes duplicates
+-- UNION ALL keeps all rows
+SELECT City FROM Customers
+UNION
+SELECT City FROM Suppliers;
+```
+
+### ✅ Question 46: Use temporary table to summarize orders
+```sql
+SELECT CustomerId, SUM(TotalAmount) AS Revenue
+INTO #OrderSummary
+FROM Orders
+GROUP BY CustomerId;
+SELECT * FROM #OrderSummary;
+```
+
+### ✅ Question 47: Detect blocking session
+```sql
+SELECT blocking_session_id, session_id
+FROM sys.dm_exec_requests
+WHERE blocking_session_id <> 0;
+```
+
+### ✅ Question 48: Monitor long-running queries
+```sql
+SELECT TOP 10 *
+FROM sys.dm_exec_requests r
+JOIN sys.dm_exec_sessions s ON r.session_id = s.session_id
+ORDER BY r.total_elapsed_time DESC;
+```
+
+### ✅ Question 49: Get index usage stats
+```sql
+SELECT OBJECT_NAME(i.object_id), i.name, user_seeks, user_scans
+FROM sys.dm_db_index_usage_stats s
+JOIN sys.indexes i ON s.object_id = i.object_id AND s.index_id = i.index_id
+WHERE database_id = DB_ID();
+```
+
+### ✅ Question 50: Use FOR XML to serialize product list
+```sql
+SELECT ProductId, ProductName
+FROM Products
+FOR XML PATH('Product'), ROOT('Products');
+```
+
+---
+
+
 
 
