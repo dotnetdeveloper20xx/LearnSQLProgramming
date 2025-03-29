@@ -5851,11 +5851,62 @@ Each question includes:
 - What, Why, and How explanation
 - Fully commented SQL examples
 
----
+-- ✅ Stage 12: SQL Server Internals – Transactions, Isolation, ACID, and Concurrency
+-- First 5 Questions
 
-### 1–5: [Already included above]
+-- 1. Begin a transaction and commit manually
+BEGIN TRANSACTION;
+    UPDATE Products SET Price = Price + 10 WHERE CategoryId = 1;
+COMMIT TRANSACTION;
+-- What: Manual control.
+-- Why: Ensure success before saving.
+-- How: Use BEGIN and COMMIT.
 
----
+--------------------------------------------------
+
+-- 2. Rollback a transaction on error
+BEGIN TRANSACTION;
+BEGIN TRY
+    DELETE FROM Customers WHERE CustomerId = 101;
+    COMMIT;
+END TRY
+BEGIN CATCH
+    ROLLBACK;
+    PRINT 'Rollback due to error: ' + ERROR_MESSAGE();
+END CATCH;
+-- What: Error-safe transaction.
+-- Why: Avoid partial updates.
+-- How: TRY...CATCH with rollback.
+
+--------------------------------------------------
+
+-- 3. Check if you're inside a transaction
+SELECT @@TRANCOUNT AS OpenTransactions;
+-- What: See nesting level.
+-- Why: Avoid transaction leaks.
+-- How: Use @@TRANCOUNT to confirm.
+
+--------------------------------------------------
+
+-- 4. Set isolation level to READ UNCOMMITTED
+SET TRANSACTION ISOLATION LEVEL READ UNCOMMITTED;
+SELECT * FROM Orders;
+-- What: Dirty reads allowed.
+-- Why: Non-blocking reads.
+-- How: Risk of uncommitted data.
+
+--------------------------------------------------
+
+### 5. Use REPEATABLE READ to lock rows
+SET TRANSACTION ISOLATION LEVEL REPEATABLE READ;
+BEGIN TRAN;
+SELECT * FROM Products WHERE CategoryId = 1;
+-- No other transaction can update/delete these rows until commit
+COMMIT;
+**What**: Lock read rows.
+**Why**: Prevent phantom updates.
+**How**: REPEATABLE READ.
+
 
 ### 6. Use SERIALIZABLE to block insert of phantom rows
 ```sql
@@ -6121,6 +6172,372 @@ DBCC TRACEON (1222, -1);
 **What**: ACID principle.
 **Why**: Transaction integrity.
 **How**: Live testing.
+
+---
+
+# ✅ Stage 13: Advanced SQL Debugging, Logging, and Error Handling
+
+This stage covers:
+- ✅ TRY/CATCH blocks for handling errors
+- ✅ Logging error messages and context
+- ✅ Debugging and tracing stored procedures
+- ✅ Handling unexpected behaviors in SQL logic
+
+Each question includes:
+- Use case
+- What, Why, How explanation
+- Code examples with comments
+
+---
+
+### 1. Use TRY/CATCH block in a stored procedure
+```sql
+BEGIN TRY
+    UPDATE Orders SET Status = 'Failed' WHERE OrderId = 99999;
+END TRY
+BEGIN CATCH
+    PRINT 'An error occurred: ' + ERROR_MESSAGE();
+END CATCH;
+```
+**What**: Catch and report error.
+**Why**: Graceful failure.
+**How**: Wrap with TRY/CATCH.
+
+---
+
+### 2. Log error details to an audit table
+```sql
+BEGIN TRY
+    UPDATE Inventory SET QuantityAvailable = QuantityAvailable - 1 WHERE VariantId = 123;
+END TRY
+BEGIN CATCH
+    INSERT INTO ErrorLog (ErrorMessage, ErrorTime)
+    VALUES (ERROR_MESSAGE(), GETDATE());
+END CATCH;
+```
+**What**: Persist error.
+**Why**: For analysis.
+**How**: ERROR_MESSAGE + INSERT.
+
+---
+
+### 3. Capture error number and severity
+```sql
+SELECT ERROR_NUMBER() AS ErrorCode, ERROR_SEVERITY() AS Severity, ERROR_MESSAGE() AS Message;
+```
+**What**: Get context.
+**Why**: Improve logs.
+**How**: Error functions.
+
+---
+
+### 4. Detect division by zero error
+```sql
+BEGIN TRY
+    SELECT 100 / 0;
+END TRY
+BEGIN CATCH
+    PRINT 'Caught division by zero.';
+END CATCH;
+```
+**What**: Exception case.
+**Why**: Prevent failure.
+**How**: TRY block.
+
+---
+
+### 5. Prevent divide by zero using NULLIF
+```sql
+SELECT 100 / NULLIF(@divisor, 0);
+```
+**What**: Avoid exception.
+**Why**: Safe division.
+**How**: NULLIF.
+
+---
+
+### 6. Use RAISERROR to return custom error
+```sql
+IF @Amount <= 0
+    RAISERROR('Amount must be greater than zero.', 16, 1);
+```
+**What**: Manual error.
+**Why**: Validation logic.
+**How**: RAISERROR.
+
+---
+
+### 7. Add error context to logs
+```sql
+INSERT INTO ErrorLog (Message, Line, Procedure, Time)
+VALUES (
+    ERROR_MESSAGE(), ERROR_LINE(), ERROR_PROCEDURE(), GETDATE()
+);
+```
+**What**: Full trace.
+**Why**: Better debugging.
+**How**: More error functions.
+
+---
+
+### 8. Exit stored procedure on error
+```sql
+IF @ErrorCode <> 0 RETURN;
+```
+**What**: Short-circuit.
+**Why**: Prevent continued execution.
+**How**: RETURN.
+
+---
+
+### 9. Handle insert failure
+```sql
+BEGIN TRY
+    INSERT INTO Orders (OrderId) VALUES (1);
+END TRY
+BEGIN CATCH
+    INSERT INTO ErrorLog (Message) VALUES (ERROR_MESSAGE());
+END CATCH;
+```
+**What**: Insert guard.
+**Why**: Audit insert issues.
+**How**: Error trap.
+
+---
+
+### 10. Log number of rows affected
+```sql
+UPDATE Orders SET Status = 'Processed' WHERE Status = 'Pending';
+PRINT @@ROWCOUNT;
+```
+**What**: Affected count.
+**Why**: Validate update.
+**How**: @@ROWCOUNT.
+
+---
+
+### 11. Capture the exact line number of error
+```sql
+BEGIN TRY
+    SELECT 1 / 0;
+END TRY
+BEGIN CATCH
+    PRINT 'Error occurred on line: ' + CAST(ERROR_LINE() AS NVARCHAR);
+END CATCH;
+```
+**What**: Trace error location.
+**Why**: Faster debugging.
+**How**: ERROR_LINE().
+
+---
+
+### 12. Identify the stored procedure where error occurred
+```sql
+BEGIN TRY
+    EXEC InvalidProcedure;
+END TRY
+BEGIN CATCH
+    PRINT 'Error in procedure: ' + ISNULL(ERROR_PROCEDURE(), 'Unknown');
+END CATCH;
+```
+**What**: Show source of failure.
+**Why**: Targeted fix.
+**How**: ERROR_PROCEDURE().
+
+---
+
+### 13. Log all SQL errors into a structured error log table
+```sql
+CREATE TABLE ErrorLog (
+    ErrorId INT IDENTITY(1,1) PRIMARY KEY,
+    ErrorMessage NVARCHAR(MAX),
+    ErrorSeverity INT,
+    ErrorState INT,
+    ErrorLine INT,
+    ErrorProcedure NVARCHAR(128),
+    ErrorDate DATETIME DEFAULT GETDATE()
+);
+```
+**What**: Persistent log table.
+**Why**: Error tracking.
+**How**: Structured table.
+
+---
+
+### 14. Use THROW to re-throw error after logging
+```sql
+BEGIN TRY
+    SELECT 1 / 0;
+END TRY
+BEGIN CATCH
+    INSERT INTO ErrorLog (ErrorMessage, ErrorSeverity, ErrorLine, ErrorProcedure)
+    VALUES (ERROR_MESSAGE(), ERROR_SEVERITY(), ERROR_LINE(), ERROR_PROCEDURE());
+    THROW;
+END CATCH;
+```
+**What**: Preserve error stack.
+**Why**: Alert application.
+**How**: THROW after log.
+
+---
+
+### 15. Use RETURN codes for basic error flow
+```sql
+CREATE PROCEDURE sp_CheckProductStock
+AS
+BEGIN
+    IF (SELECT QuantityAvailable FROM Inventory WHERE VariantId = 1) <= 0
+        RETURN 1;
+    RETURN 0;
+END;
+```
+**What**: Exit codes.
+**Why**: Simple error signaling.
+**How**: RETURN.
+
+---
+
+### 16. Use PRINT for debugging inside procedure
+```sql
+PRINT 'Starting data validation...';
+PRINT 'Validation complete.';
+```
+**What**: Debug statements.
+**Why**: Trace flow.
+**How**: PRINT messages.
+
+---
+
+### 17. Validate and skip bad rows using TRY_CONVERT
+```sql
+SELECT * FROM Orders
+WHERE TRY_CONVERT(DATE, OrderDate) IS NOT NULL;
+```
+**What**: Safe casting.
+**Why**: Avoid conversion errors.
+**How**: TRY_CONVERT.
+
+---
+
+### 18. Use table variable for intermediate error data
+```sql
+DECLARE @Errors TABLE (Message NVARCHAR(MAX));
+BEGIN TRY
+    EXEC SomeBrokenProc;
+END TRY
+BEGIN CATCH
+    INSERT INTO @Errors VALUES (ERROR_MESSAGE());
+END CATCH;
+SELECT * FROM @Errors;
+```
+**What**: Temp error capture.
+**Why**: Later review.
+**How**: Table variable.
+
+---
+
+### 19. Handle batch execution errors with TRY/CATCH
+```sql
+BEGIN TRY
+    EXEC sp_InsertBatchA;
+    EXEC sp_InsertBatchB;
+END TRY
+BEGIN CATCH
+    EXEC sp_LogError @Message = ERROR_MESSAGE();
+END CATCH;
+```
+**What**: Wrap batch steps.
+**Why**: Capture global failure.
+**How**: Outer TRY block.
+
+---
+
+### 20. Add audit trail for every error
+```sql
+CREATE TRIGGER trg_ErrorAudit
+ON dbo.ErrorLog
+AFTER INSERT
+AS
+BEGIN
+    INSERT INTO ErrorAudit (ErrorId, Notified, NotificationDate)
+    SELECT ErrorId, 0, GETDATE()
+    FROM inserted;
+END;
+```
+**What**: Error post-log.
+**Why**: Notification layer.
+**How**: DML trigger.
+
+---
+
+### 21. Use RAISERROR with custom error number
+```sql
+RAISERROR (50001, 16, 1) WITH LOG;
+```
+**What**: Log to Event Viewer.
+**Why**: Custom code.
+**How**: RAISERROR.
+
+---
+
+### 22. Include input parameters in error log
+```sql
+BEGIN CATCH
+    INSERT INTO ErrorLog (ErrorMessage)
+    VALUES ('ProductId=' + CAST(@ProductId AS NVARCHAR) + ' — ' + ERROR_MESSAGE());
+END CATCH;
+```
+**What**: Context logging.
+**Why**: Easier tracing.
+**How**: Concatenate inputs.
+
+---
+
+### 23. Use nested TRY/CATCH blocks
+```sql
+BEGIN TRY
+    BEGIN TRY
+        SELECT 1 / 0;
+    END TRY
+    BEGIN CATCH
+        PRINT 'Inner block caught';
+    END CATCH;
+END TRY
+BEGIN CATCH
+    PRINT 'Outer block caught';
+END CATCH;
+```
+**What**: Scoped error.
+**Why**: Layered safety.
+**How**: Nested blocks.
+
+---
+
+### 24. Create centralized error handling proc
+```sql
+CREATE PROCEDURE sp_LogError (@Message NVARCHAR(MAX))
+AS
+BEGIN
+    INSERT INTO ErrorLog (ErrorMessage, ErrorDate)
+    VALUES (@Message, GETDATE());
+END;
+```
+**What**: Reusable logger.
+**Why**: DRY principle.
+**How**: Centralized logic.
+
+---
+
+### 25. Log SQL job failures via job history
+```sql
+SELECT *
+FROM msdb.dbo.sysjobhistory
+WHERE run_status = 0
+ORDER BY run_date DESC;
+```
+**What**: Job failure log.
+**Why**: Operational monitoring.
+**How**: SQL Agent history.
 
 ---
 
