@@ -7687,6 +7687,111 @@ SELECT * FROM CategoryTree ORDER BY Level;
 
 ...
 
+### ✅ Question 6: Resolve parameter sniffing
+```sql
+-- Use local variables to avoid sniffing
+DECLARE @LocalCategoryId INT = 4;
+SELECT * FROM Products WHERE CategoryId = @LocalCategoryId;
+-- WHY: SQL Server won't reuse a poor plan cached from skewed parameter
+```
+
+### ✅ Question 7: Re-write RBAR logic into set-based query
+```sql
+-- Poor (RBAR - Row By Agonizing Row)
+DECLARE cursor CURSOR FOR SELECT OrderId FROM Orders;
+-- FIX: Set-based version
+UPDATE Orders SET Status = 'Shipped' WHERE OrderDate < GETDATE();
+-- WHY: Set-based operations scale better
+```
+
+### ✅ Question 8: Use window function to get moving average
+```sql
+SELECT OrderDate, SUM(TotalAmount) OVER (ORDER BY OrderDate ROWS BETWEEN 6 PRECEDING AND CURRENT ROW) AS MovingAvg
+FROM Orders;
+-- WHY: Tracks 7-day revenue trends
+```
+
+### ✅ Question 9: Find most recent 3 orders per region
+```sql
+SELECT * FROM (
+  SELECT *, ROW_NUMBER() OVER (PARTITION BY Region ORDER BY OrderDate DESC) AS rn
+  FROM Orders
+) a WHERE rn <= 3;
+-- WHY: Combines partition + filtering
+```
+
+### ✅ Question 10: Identify most CPU-intensive queries
+```sql
+SELECT TOP 10 qs.total_worker_time, qs.execution_count, qt.text
+FROM sys.dm_exec_query_stats qs
+CROSS APPLY sys.dm_exec_sql_text(qs.sql_handle) qt
+ORDER BY qs.total_worker_time DESC;
+-- WHY: Spot expensive workloads
+```
+
+### ✅ Question 11: Dynamic pivot table for category sales
+```sql
+DECLARE @cols NVARCHAR(MAX);
+SELECT @cols = STRING_AGG(QUOTENAME(CategoryName), ',')
+FROM Categories;
+
+DECLARE @sql NVARCHAR(MAX);
+SET @sql = '
+SELECT * FROM (
+  SELECT c.CategoryName, o.OrderDate, oi.Quantity
+  FROM OrderItems oi
+  JOIN Products p ON oi.ProductId = p.ProductId
+  JOIN Categories c ON p.CategoryId = c.CategoryId
+  JOIN Orders o ON oi.OrderId = o.OrderId
+) src
+PIVOT (
+  SUM(Quantity) FOR CategoryName IN (' + @cols + ')
+) AS pvt;';
+EXEC sp_executesql @sql;
+-- WHY: Reusable category dashboard
+```
+
+### ✅ Question 12: Audit access to sensitive table
+```sql
+CREATE TRIGGER trg_LogSelect
+ON Employees
+AFTER SELECT
+AS
+BEGIN
+    INSERT INTO AuditLog (ActionType, Username, ActionDate)
+    VALUES ('SELECT', SYSTEM_USER, GETDATE());
+END;
+-- WHY: Regulatory logging
+```
+
+### ✅ Question 13: Design ETL staging table with change tracking
+```sql
+CREATE TABLE StagingOrders (
+    OrderId INT,
+    CustomerId INT,
+    OrderDate DATETIME,
+    HashValue AS CHECKSUM(*),
+    Processed BIT DEFAULT 0
+);
+-- WHY: Detect changes efficiently
+```
+
+### ✅ Question 14: Explain fill factor in indexing
+- **Fill Factor** determines how much space to leave on index pages.
+- Lower fill factor (e.g., 80) reduces page splits during heavy inserts.
+- Set during index creation: `WITH (FILLFACTOR = 80)`
+
+### ✅ Question 15: Monitor blocked sessions
+```sql
+SELECT blocking_session_id, session_id, wait_type, wait_time, wait_resource
+FROM sys.dm_exec_requests
+WHERE blocking_session_id <> 0;
+-- WHY: Investigate concurrency bottlenecks
+```
+
+...
+
+
 
 
 
