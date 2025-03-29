@@ -7788,8 +7788,107 @@ FROM sys.dm_exec_requests
 WHERE blocking_session_id <> 0;
 -- WHY: Investigate concurrency bottlenecks
 ```
+...
+
+### ✅ Question 16: Use indexed view for performance
+```sql
+CREATE VIEW vw_ProductRevenue
+WITH SCHEMABINDING
+AS
+SELECT p.ProductId, SUM(oi.Quantity * oi.PriceAtPurchase) AS Revenue
+FROM dbo.Products p
+JOIN dbo.OrderItems oi ON p.ProductId = oi.ProductId
+GROUP BY p.ProductId;
+GO
+CREATE UNIQUE CLUSTERED INDEX ix_ProductRevenue ON vw_ProductRevenue(ProductId);
+-- WHY: Materializes complex aggregation
+```
+
+### ✅ Question 17: Compare temp table vs table variable for large joins
+```sql
+-- Temp tables are better for large rowsets due to statistics
+-- Table variables skip auto-generated stats
+-- Use temp tables for joins, filtering
+```
+
+### ✅ Question 18: Log slow queries with duration threshold
+```sql
+-- Use Extended Events or query store, but sample:
+SELECT *
+FROM sys.dm_exec_query_stats
+WHERE total_elapsed_time / execution_count > 1000000; -- 1 second avg
+```
+
+### ✅ Question 19: Tune bulk insert performance
+- Use `TABLOCK`, batch sizes, `ROWS_PER_BATCH`, and disable indexes during load
+```sql
+BULK INSERT Orders FROM 'orders.csv'
+WITH (
+    FIRSTROW = 2,
+    FIELDTERMINATOR = ',',
+    ROWTERMINATOR = '\n',
+    TABLOCK,
+    BATCHSIZE = 5000
+);
+```
+
+### ✅ Question 20: Query to show index fragmentation
+```sql
+SELECT dbschemas.[name] AS 'Schema', dbtables.[name] AS 'Table',
+       dbindexes.[name] AS 'Index', indexstats.avg_fragmentation_in_percent
+FROM sys.dm_db_index_physical_stats (DB_ID(), NULL, NULL, NULL, 'LIMITED') indexstats
+JOIN sys.tables dbtables ON dbtables.[object_id] = indexstats.[object_id]
+JOIN sys.schemas dbschemas ON dbtables.[schema_id] = dbschemas.[schema_id]
+JOIN sys.indexes AS dbindexes ON dbindexes.[object_id] = indexstats.[object_id]
+                                AND indexstats.index_id = dbindexes.index_id;
+```
+
+### ✅ Question 21: Find skewed distribution using histograms
+```sql
+DBCC SHOW_STATISTICS ('Orders', idx_OrderDate);
+-- WHY: Check histogram for distribution skew
+```
+
+### ✅ Question 22: Generate XML output for nested invoices
+```sql
+SELECT i.InvoiceId, i.Total,
+       (
+         SELECT ProductId, Quantity
+         FROM InvoiceLines WHERE InvoiceId = i.InvoiceId
+         FOR XML PATH('Item'), ROOT('Items'), TYPE
+       ) AS ItemsXML
+FROM Invoices i;
+```
+
+### ✅ Question 23: Implement row-level security using predicate function
+```sql
+CREATE FUNCTION fn_SecurityPredicate (@Region AS NVARCHAR(50))
+RETURNS TABLE
+WITH SCHEMABINDING
+AS
+RETURN SELECT 1 AS Result WHERE @Region = USER_NAME();
+-- Apply with SECURITY POLICY
+```
+
+### ✅ Question 24: Cleanup orphaned foreign keys
+```sql
+SELECT o.OrderId
+FROM Orders o
+LEFT JOIN Customers c ON o.CustomerId = c.CustomerId
+WHERE c.CustomerId IS NULL;
+```
+
+### ✅ Question 25: Use CTE to paginate with total count
+```sql
+WITH Paginated AS (
+    SELECT *, ROW_NUMBER() OVER (ORDER BY OrderDate DESC) AS RowNum
+    FROM Orders
+)
+SELECT * FROM Paginated WHERE RowNum BETWEEN 11 AND 20;
+```
 
 ...
+
 
 
 
