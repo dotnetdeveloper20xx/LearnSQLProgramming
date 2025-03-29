@@ -7516,6 +7516,73 @@ FOR XML PATH('Product'), ROOT('Products');
 
 ---
 
+## 🧠 SQL Mastery Senior-Level Interview Challenge – 50 Questions & Deep Dive Answers
+
+This project document contains 50 high-level SQL questions specifically crafted for senior SQL developers. These challenges are designed to test real-world expertise across optimization, internals, indexing, query tuning, dynamic SQL, ETL, security, and advanced analytics.
+
+Each solution includes:
+- Detailed commentary
+- Optimization rationale
+- Best practices
+
+---
+
+### ✅ Question 1: Identify and fix a non-SARGable query
+```sql
+-- Poor (Non-SARGable, prevents index usage)
+SELECT * FROM Orders WHERE YEAR(OrderDate) = 2023;
+
+-- Better (SARGable)
+SELECT * FROM Orders
+WHERE OrderDate >= '2023-01-01' AND OrderDate < '2024-01-01';
+-- WHY: Preserves index seek by avoiding functions on column
+```
+
+### ✅ Question 2: Analyze execution plan and reduce key lookup
+```sql
+-- Query causing key lookup:
+SELECT ProductName, Price FROM Products WHERE ProductId = 5;
+
+-- FIX: Create covering index
+CREATE NONCLUSTERED INDEX idx_Product_Cover ON Products(ProductId) INCLUDE (ProductName, Price);
+-- WHY: Prevents extra bookmark lookup for non-key columns
+```
+
+### ✅ Question 3: Detect and resolve a deadlock
+```sql
+-- Use system_health extended event
+SELECT XEvent.query('(event/data[@name="resource"])[1]') AS DeadlockInfo
+FROM sys.fn_xe_file_target_read_file('system_health*.xel', NULL, NULL, NULL);
+-- WHY: Captures and reveals deadlock XML graph
+```
+
+### ✅ Question 4: Design a partitioned table for 5 years of orders
+```sql
+-- Create partition function
+CREATE PARTITION FUNCTION pf_OrderDateRange (DATE)
+AS RANGE LEFT FOR VALUES ('2020-12-31','2021-12-31','2022-12-31','2023-12-31','2024-12-31');
+
+-- WHY: Efficient I/O management by year ranges
+```
+
+### ✅ Question 5: Write a recursive CTE to calculate category depth
+```sql
+WITH CategoryTree AS (
+    SELECT CategoryId, CategoryName, ParentId, 0 AS Level
+    FROM Categories
+    WHERE ParentId IS NULL
+    UNION ALL
+    SELECT c.CategoryId, c.CategoryName, c.ParentId, ct.Level + 1
+    FROM Categories c
+    JOIN CategoryTree ct ON c.ParentId = ct.CategoryId
+)
+SELECT * FROM CategoryTree ORDER BY Level;
+-- WHY: Explores hierarchy levels
+```
+
+...
+
+
 
 
 
