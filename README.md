@@ -5838,5 +5838,291 @@ GROUP BY CustomerId;
 
 ---
 
+# ✅ Stage 12: SQL Server Internals – Transactions, Isolation, ACID, and Concurrency
+
+This stage explores:
+- ✅ Understanding Transactions and ACID principles
+- ✅ Isolation levels (Read Committed, Repeatable Read, Serializable, Snapshot)
+- ✅ Locking and blocking
+- ✅ Deadlocks and concurrency handling
+
+Each question includes:
+- Real-world use case
+- What, Why, and How explanation
+- Fully commented SQL examples
+
+---
+
+### 1–5: [Already included above]
+
+---
+
+### 6. Use SERIALIZABLE to block insert of phantom rows
+```sql
+SET TRANSACTION ISOLATION LEVEL SERIALIZABLE;
+BEGIN TRAN;
+SELECT * FROM Products WHERE CategoryId = 1;
+-- Prevents any INSERT of new CategoryId = 1 during this transaction
+COMMIT;
+```
+**What**: Highest isolation.
+**Why**: Prevent phantom rows.
+**How**: SERIALIZABLE.
+
+---
+
+### 7. Use SNAPSHOT isolation for versioned reads
+```sql
+ALTER DATABASE YourDB SET ALLOW_SNAPSHOT_ISOLATION ON;
+SET TRANSACTION ISOLATION LEVEL SNAPSHOT;
+BEGIN TRAN;
+SELECT * FROM Products;
+COMMIT;
+```
+**What**: Versioned read.
+**Why**: No blocking.
+**How**: Snapshot mode.
+
+---
+
+### 8. Identify blocking sessions
+```sql
+SELECT blocking_session_id, session_id, wait_type, wait_time
+FROM sys.dm_exec_requests
+WHERE blocking_session_id <> 0;
+```
+**What**: Detect blockers.
+**Why**: Performance impact.
+**How**: DMV.
+
+---
+
+### 9. Create a deadlock scenario
+```sql
+-- Session A:
+BEGIN TRAN;
+UPDATE Products SET Price = Price + 1 WHERE ProductId = 1;
+-- Session B:
+BEGIN TRAN;
+UPDATE Products SET Price = Price + 1 WHERE ProductId = 2;
+-- Back in Session A:
+UPDATE Products SET Price = Price + 1 WHERE ProductId = 2;
+-- Session B does:
+UPDATE Products SET Price = Price + 1 WHERE ProductId = 1;
+```
+**What**: Simulates deadlock.
+**Why**: For testing.
+**How**: Cross-lock.
+
+---
+
+### 10. Detect deadlocks using system_health extended event
+```sql
+-- In SSMS:
+-- Go to Management > Extended Events > system_health > View Target Data
+-- Filter for deadlock events
+```
+**What**: Find deadlocks.
+**Why**: Debug concurrency.
+**How**: Use built-in XEvent.
+
+---
+
+### 11. Set XACT_ABORT ON to auto rollback on error
+```sql
+SET XACT_ABORT ON;
+BEGIN TRAN;
+UPDATE Orders SET Status = 'Shipped' WHERE OrderId = 1;
+-- Force error
+SELECT 1/0;
+COMMIT;
+```
+**What**: Rollback on error.
+**Why**: Auto safeguard.
+**How**: XACT_ABORT.
+
+---
+
+### 12. View active transactions
+```sql
+SELECT * FROM sys.dm_tran_active_transactions;
+```
+**What**: List running TXNs.
+**Why**: Monitor locks.
+**How**: DMV usage.
+
+---
+
+### 13. Detect open transactions by session
+```sql
+DBCC OPENTRAN;
+```
+**What**: See oldest open TXN.
+**Why**: Prevent log bloat.
+**How**: DBCC command.
+
+---
+
+### 14. Monitor locks held by a session
+```sql
+SELECT request_session_id, resource_type, resource_description
+FROM sys.dm_tran_locks;
+```
+**What**: Lock inventory.
+**Why**: Investigate blocking.
+**How**: DMV query.
+
+---
+
+### 15. Use READ COMMITTED SNAPSHOT to reduce locking
+```sql
+ALTER DATABASE YourDB SET READ_COMMITTED_SNAPSHOT ON;
+```
+**What**: Replace locks with versions.
+**Why**: Improves concurrency.
+**How**: Version-based reads.
+
+---
+
+### 16. Use explicit transaction across multiple steps
+```sql
+BEGIN TRAN;
+UPDATE Inventory SET QuantityAvailable = QuantityAvailable - 1 WHERE VariantId = 5;
+INSERT INTO OrderItems (OrderId, VariantId, Quantity) VALUES (1001, 5, 1);
+COMMIT;
+```
+**What**: Multi-step TXN.
+**Why**: Ensure atomic update.
+**How**: BEGIN...COMMIT block.
+
+---
+
+### 17. View current isolation level
+```sql
+DBCC USEROPTIONS;
+```
+**What**: Session settings.
+**Why**: Confirm isolation.
+**How**: DBCC.
+
+---
+
+### 18. Demonstrate dirty read
+```sql
+-- Session 1:
+BEGIN TRAN;
+UPDATE Products SET Price = 999 WHERE ProductId = 1;
+-- Session 2:
+SET TRANSACTION ISOLATION LEVEL READ UNCOMMITTED;
+SELECT * FROM Products WHERE ProductId = 1;
+-- Session 1 ROLLBACK
+```
+**What**: Dirty read.
+**Why**: Test visibility.
+**How**: Parallel test.
+
+---
+
+### 19. Demonstrate phantom read
+```sql
+-- Session 1:
+SET TRANSACTION ISOLATION LEVEL READ COMMITTED;
+BEGIN TRAN;
+SELECT * FROM Products WHERE CategoryId = 1;
+-- Session 2 inserts new Product with CategoryId = 1
+-- Session 1: SELECT * again → sees extra row
+COMMIT;
+```
+**What**: Phantom.
+**Why**: Test repeatability.
+**How**: Row count change.
+
+---
+
+### 20. Demonstrate non-repeatable read
+```sql
+-- Session 1:
+BEGIN TRAN;
+SELECT Price FROM Products WHERE ProductId = 1;
+-- Session 2 updates that product
+-- Session 1: SELECT again → different value
+COMMIT;
+```
+**What**: Changed row.
+**Why**: Validate repeatability.
+**How**: Cross-session.
+
+---
+
+### 21. Retry transaction using loop pattern
+```sql
+DECLARE @retry INT = 0;
+WHILE @retry < 3
+BEGIN
+    BEGIN TRY
+        BEGIN TRAN;
+        -- your SQL
+        COMMIT;
+        BREAK;
+    END TRY
+    BEGIN CATCH
+        ROLLBACK;
+        SET @retry += 1;
+        WAITFOR DELAY '00:00:01';
+    END CATCH
+END;
+```
+**What**: Retry logic.
+**Why**: Handle deadlocks.
+**How**: TRY/CATCH loop.
+
+---
+
+### 22. Use application locks
+```sql
+EXEC sp_getapplock @Resource = 'MyProcess', @LockMode = 'Exclusive';
+-- Your SQL logic
+EXEC sp_releaseapplock @Resource = 'MyProcess';
+```
+**What**: Manual locking.
+**Why**: Serialize workflow.
+**How**: `sp_getapplock()`.
+
+---
+
+### 23. Enable deadlock trace flag
+```sql
+DBCC TRACEON (1222, -1);
+```
+**What**: Log deadlocks.
+**Why**: Capture event.
+**How**: Trace flag.
+
+---
+
+### 24. Prevent deadlocks using ordered access
+```sql
+-- Always update tables in the same order in every proc
+-- e.g., First update Inventory, then Orders
+```
+**What**: Avoid crossover.
+**Why**: Deadlock prevention.
+**How**: Standard sequence.
+
+---
+
+### 25. Demonstrate ACID: Atomicity, Consistency, Isolation, Durability
+```sql
+-- Atomicity: All-or-nothing with COMMIT/ROLLBACK
+-- Consistency: Constraints enforced within TXN
+-- Isolation: Test with isolation levels
+-- Durability: Confirm data persists after COMMIT
+```
+**What**: ACID principle.
+**Why**: Transaction integrity.
+**How**: Live testing.
+
+---
+
 
 
