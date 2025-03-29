@@ -6555,5 +6555,335 @@ ORDER BY run_date DESC;
 
 ---
 
+## ✅ Stage 14: Materialized Views, Indexed Views & SQL Refactoring
+
+This stage covers:
+- ✅ Materialized views and indexed views
+- ✅ Refactoring complex queries
+- ✅ View optimization strategies
+- ✅ Refresh logic and schema-bound views
+
+Each question includes:
+- Real-world scenario
+- What, Why, and How explanation
+- SQL code with comments
+
+---
+
+### 1. Create a basic view for customer orders
+```sql
+CREATE VIEW vw_CustomerOrders AS
+SELECT o.OrderId, o.CustomerId, o.OrderDate, SUM(oi.Quantity * oi.PriceAtPurchase) AS TotalAmount
+FROM Orders o
+JOIN OrderItems oi ON o.OrderId = oi.OrderId
+GROUP BY o.OrderId, o.CustomerId, o.OrderDate;
+```
+- **What**: Creates a logical view.
+- **Why**: Reusable query for reports.
+- **How**: Aggregation + join.
+
+---
+
+### 2. Create a SCHEMABINDING view (required for indexed views)
+```sql
+CREATE VIEW vw_SalesSummary
+WITH SCHEMABINDING
+AS
+SELECT CustomerId, COUNT_BIG(*) AS TotalOrders, SUM(TotalAmount) AS Revenue
+FROM dbo.Orders
+GROUP BY CustomerId;
+```
+- **What**: Schema-bound view.
+- **Why**: Required for indexes.
+- **How**: `WITH SCHEMABINDING` keyword.
+
+---
+
+### 3. Add a clustered index to materialize the view
+```sql
+CREATE UNIQUE CLUSTERED INDEX idx_vw_SalesSummary ON vw_SalesSummary (CustomerId);
+```
+- **What**: Materializes view.
+- **Why**: Speeds up SELECT.
+- **How**: Required on unique column set.
+
+---
+
+### 4. Refactor subqueries using views
+```sql
+-- Instead of nesting:
+SELECT * FROM (
+    SELECT CustomerId, COUNT(*) AS Orders FROM Orders GROUP BY CustomerId
+) a
+-- Use:
+SELECT * FROM vw_SalesSummary;
+```
+- **What**: Replace nested queries.
+- **Why**: Improves readability.
+- **How**: Use named view.
+
+---
+
+### 5. View product performance
+```sql
+CREATE VIEW vw_TopProducts AS
+SELECT p.ProductId, p.ProductName, SUM(oi.Quantity) AS TotalSold
+FROM Products p
+JOIN OrderItems oi ON p.ProductId = oi.ProductId
+GROUP BY p.ProductId, p.ProductName;
+```
+- **What**: Analyze sales.
+- **Why**: Useful for dashboards.
+- **How**: Join + GROUP BY.
+
+---
+
+### 6. Use views for pagination
+```sql
+CREATE VIEW vw_PagedProducts AS
+SELECT *, ROW_NUMBER() OVER (ORDER BY ProductId) AS RowNum
+FROM Products;
+```
+- **What**: Supports paging.
+- **Why**: Backend API scenarios.
+- **How**: Add ROW_NUMBER().
+
+---
+
+### 7. Filter data in a view
+```sql
+CREATE VIEW vw_RecentOrders AS
+SELECT * FROM Orders WHERE OrderDate > DATEADD(DAY, -30, GETDATE());
+```
+- **What**: Only recent data.
+- **Why**: Improve performance.
+- **How**: Add WHERE clause.
+
+---
+
+### 8. Partition data inside view
+```sql
+CREATE VIEW vw_OrderRank AS
+SELECT *, RANK() OVER (PARTITION BY CustomerId ORDER BY OrderDate DESC) AS OrderRank
+FROM Orders;
+```
+- **What**: Rank orders per customer.
+- **Why**: Refactor for leaderboards.
+- **How**: Use `RANK()`.
+
+---
+
+### 9. Handle NULLs in view output
+```sql
+CREATE VIEW vw_CustomerTotals AS
+SELECT CustomerId, ISNULL(SUM(TotalAmount), 0) AS TotalSpent
+FROM Orders
+GROUP BY CustomerId;
+```
+- **What**: Avoid nulls.
+- **Why**: For reporting.
+- **How**: Use ISNULL.
+
+---
+
+### 10. Refactor repeated JOIN into view
+```sql
+CREATE VIEW vw_ProductCategory AS
+SELECT p.ProductId, p.ProductName, c.CategoryName
+FROM Products p
+JOIN Categories c ON p.CategoryId = c.CategoryId;
+```
+- **What**: Join logic reusable.
+- **Why**: Remove duplication.
+- **How**: View abstraction.
+
+---
+
+### 11. Add view for financial summary
+```sql
+CREATE VIEW vw_FinancialSummary AS
+SELECT YEAR(OrderDate) AS Year, MONTH(OrderDate) AS Month,
+       SUM(TotalAmount) AS Revenue
+FROM Orders
+GROUP BY YEAR(OrderDate), MONTH(OrderDate);
+```
+- **What**: Monthly breakdown.
+- **Why**: Executive summary.
+- **How**: Group by year/month.
+
+---
+
+### 12. Optimize view using indexed column
+```sql
+CREATE VIEW vw_Optimized AS
+SELECT ProductId, ProductName FROM Products WHERE IsActive = 1;
+```
+- **What**: Leverages index.
+- **Why**: Better seek performance.
+- **How**: Indexed WHERE field.
+
+---
+
+### 13. Nested views for modular design
+```sql
+CREATE VIEW vw_OrderItemsDetailed AS
+SELECT oi.OrderItemId, o.CustomerId, p.ProductName, oi.Quantity
+FROM OrderItems oi
+JOIN Orders o ON oi.OrderId = o.OrderId
+JOIN Products p ON oi.ProductId = p.ProductId;
+```
+- **What**: Multi-table abstraction.
+- **Why**: Central query reuse.
+- **How**: Joins in a view.
+
+---
+
+### 14. Parameterize filtering using table-valued function (TVF)
+```sql
+CREATE FUNCTION dbo.fn_CustomerOrders (@CustomerId INT)
+RETURNS TABLE
+AS
+RETURN (
+    SELECT * FROM Orders WHERE CustomerId = @CustomerId
+);
+```
+- **What**: Acts like view with input.
+- **Why**: Dynamic view-like behavior.
+- **How**: Table-valued function.
+
+---
+
+### 15. Use view to isolate sensitive columns
+```sql
+CREATE VIEW vw_PublicOrders AS
+SELECT OrderId, OrderDate, Status FROM Orders;
+```
+- **What**: Prevents access to sensitive data.
+- **Why**: Security layer.
+- **How**: Limit columns.
+
+---
+
+### 16. Track changes via view on audit log
+```sql
+CREATE VIEW vw_RecentChanges AS
+SELECT * FROM AuditLog WHERE ChangeDate > DATEADD(HOUR, -1, GETDATE());
+```
+- **What**: Monitors recent activity.
+- **Why**: System integrity check.
+- **How**: Time-based filter.
+
+---
+
+### 17. Use view with UNION ALL
+```sql
+CREATE VIEW vw_AllUsers AS
+SELECT CustomerId AS Id, Name, 'Customer' AS Type FROM Customers
+UNION ALL
+SELECT EmployeeId, FullName, 'Employee' FROM Employees;
+```
+- **What**: Combine sources.
+- **Why**: Unified identity view.
+- **How**: Use UNION ALL.
+
+---
+
+### 18. Indexed view for computed column
+```sql
+CREATE VIEW vw_ProductMargin
+WITH SCHEMABINDING
+AS
+SELECT ProductId, Price - Cost AS Margin FROM dbo.Products;
+GO
+CREATE UNIQUE CLUSTERED INDEX idx_Margin ON vw_ProductMargin (ProductId);
+```
+- **What**: Store computed values.
+- **Why**: Query speed.
+- **How**: Use SCHEMABINDING + index.
+
+---
+
+### 19. Refresh a materialized view (manually)
+```sql
+-- Drop and recreate or reindex view
+ALTER INDEX idx_vw_SalesSummary ON vw_SalesSummary REBUILD;
+```
+- **What**: Refresh stale data.
+- **Why**: Improve consistency.
+- **How**: Manual refresh.
+
+---
+
+### 20. Use view to support API DTO shape
+```sql
+CREATE VIEW vw_API_ProductDetails AS
+SELECT ProductId, ProductName, Price FROM Products WHERE IsDiscontinued = 0;
+```
+- **What**: Matches frontend DTO.
+- **Why**: API contract.
+- **How**: Tailor structure.
+
+---
+
+### 21. Use indexed view for monthly KPI dashboard
+```sql
+CREATE VIEW vw_KPI_Monthly
+WITH SCHEMABINDING
+AS
+SELECT YEAR(OrderDate) AS Year, MONTH(OrderDate) AS Month,
+       COUNT_BIG(*) AS Orders, SUM(TotalAmount) AS Revenue
+FROM dbo.Orders
+GROUP BY YEAR(OrderDate), MONTH(OrderDate);
+GO
+CREATE UNIQUE CLUSTERED INDEX idx_KPI_Month ON vw_KPI_Monthly (Year, Month);
+```
+- **What**: Dashboard boost.
+- **Why**: Real-time speed.
+- **How**: Indexed grouped view.
+
+---
+
+### 22. Troubleshoot view dependency
+```sql
+EXEC sp_depends 'vw_CustomerOrders';
+```
+- **What**: Show dependent objects.
+- **Why**: Impact analysis.
+- **How**: System stored proc.
+
+---
+
+### 23. Refresh all views in batch
+```sql
+EXEC sp_refreshview 'vw_CustomerOrders';
+EXEC sp_refreshview 'vw_TopProducts';
+```
+- **What**: Ensures accuracy.
+- **Why**: After schema change.
+- **How**: Refresh view metadata.
+
+---
+
+### 24. Analyze query plan for view performance
+```sql
+-- Enable Actual Execution Plan and run:
+SELECT * FROM vw_TopProducts;
+```
+- **What**: Tune performance.
+- **Why**: Spot bottlenecks.
+- **How**: View execution plan.
+
+---
+
+### 25. Script view to deploy to multiple environments
+```sql
+-- Use SSMS: Right-click > Script View as > CREATE To > New Query Editor Window
+```
+- **What**: Reusable definition.
+- **Why**: Version-controlled.
+- **How**: Generate script.
+
+---
+
 
 
