@@ -7820,7 +7820,6 @@ WHERE total_elapsed_time / execution_count > 1000000; -- 1 second avg
 ```
 
 ### ✅ Question 19: Tune bulk insert performance
-- Use `TABLOCK`, batch sizes, `ROWS_PER_BATCH`, and disable indexes during load
 ```sql
 BULK INSERT Orders FROM 'orders.csv'
 WITH (
@@ -7830,6 +7829,7 @@ WITH (
     TABLOCK,
     BATCHSIZE = 5000
 );
+-- WHY: Improve ETL throughput
 ```
 
 ### ✅ Question 20: Query to show index fragmentation
@@ -7841,6 +7841,7 @@ JOIN sys.tables dbtables ON dbtables.[object_id] = indexstats.[object_id]
 JOIN sys.schemas dbschemas ON dbtables.[schema_id] = dbschemas.[schema_id]
 JOIN sys.indexes AS dbindexes ON dbindexes.[object_id] = indexstats.[object_id]
                                 AND indexstats.index_id = dbindexes.index_id;
+-- WHY: Monitor index health
 ```
 
 ### ✅ Question 21: Find skewed distribution using histograms
@@ -7885,13 +7886,195 @@ WITH Paginated AS (
     FROM Orders
 )
 SELECT * FROM Paginated WHERE RowNum BETWEEN 11 AND 20;
+-- WHY: Server-side pagination
 ```
 
-...
+### ✅ Question 26: Use APPLY for top N per group
+```sql
+SELECT c.CustomerId, c.Name, o.OrderId, o.TotalAmount
+FROM Customers c
+CROSS APPLY (
+    SELECT TOP 1 * FROM Orders o
+    WHERE o.CustomerId = c.CustomerId
+    ORDER BY o.TotalAmount DESC
+) o;
+```
 
+### ✅ Question 27: Use TRY/CATCH to log transactional errors
+```sql
+BEGIN TRY
+    BEGIN TRAN;
+    UPDATE Orders SET Status = 'Completed' WHERE OrderId = 1001;
+    COMMIT;
+END TRY
+BEGIN CATCH
+    ROLLBACK;
+    INSERT INTO ErrorLog (Message) VALUES (ERROR_MESSAGE());
+END CATCH;
+```
 
+### ✅ Question 28: Find implicit conversions degrading performance
+```sql
+SELECT *
+FROM sys.dm_exec_query_stats AS qs
+CROSS APPLY sys.dm_exec_sql_text(qs.sql_handle) AS st
+WHERE st.text LIKE '%CONVERT(%';
+-- Check with execution plan warnings too
+```
 
+### ✅ Question 29: Simulate memory grant pressure scenario
+```sql
+-- Run multiple large sorts without indexes
+-- Use DMVs to watch memory wait types: RESOURCE_SEMAPHORE
+```
 
+### ✅ Question 30: Use sys.dm_os_wait_stats for performance diagnostics
+```sql
+SELECT TOP 10 wait_type, wait_time_ms, signal_wait_time_ms, waiting_tasks_count
+FROM sys.dm_os_wait_stats
+WHERE wait_type NOT IN ('CLR_SEMAPHORE','LAZYWRITER_SLEEP','SLEEP_TASK','RESOURCE_QUEUE')
+ORDER BY wait_time_ms DESC;
+-- WHY: Bottleneck source detection
+```
 
+### ✅ Question 31: Create inline table-valued function
+```sql
+CREATE FUNCTION dbo.fn_CustomerOrders (@CustomerId INT)
+RETURNS TABLE
+AS
+RETURN (
+    SELECT * FROM Orders WHERE CustomerId = @CustomerId
+);
+-- WHY: Performant, parameterized view alternative
+```
+
+### ✅ Question 32: Pivot with dynamic column headers
+```sql
+-- Use STRING_AGG and sp_executesql with dynamic SQL (similar to Q11 Part 1)
+```
+
+### ✅ Question 33: Design filtered index for active rows only
+```sql
+CREATE INDEX ix_Orders_Active ON Orders(OrderDate)
+WHERE Status = 'Active';
+-- WHY: Narrower index, faster reads
+```
+
+### ✅ Question 34: Optimize scalar UDF with inline rewrite
+```sql
+-- Scalar UDFs slow row-by-row
+-- Refactor using CROSS APPLY with subquery or CTE
+```
+
+### ✅ Question 35: Create a MERGE statement for UPSERT
+```sql
+MERGE INTO Customers AS target
+USING (SELECT 101 AS CustomerId, 'Mike' AS Name) AS source
+ON target.CustomerId = source.CustomerId
+WHEN MATCHED THEN
+    UPDATE SET Name = source.Name
+WHEN NOT MATCHED THEN
+    INSERT (CustomerId, Name) VALUES (source.CustomerId, source.Name);
+```
+
+### ✅ Question 36: Profile tempdb contention
+```sql
+SELECT session_id, request_id, wait_type, wait_resource
+FROM sys.dm_exec_requests
+WHERE database_id = 2;
+```
+
+### ✅ Question 37: Use ROWVERSION for optimistic concurrency
+```sql
+-- Add a rowversion column and validate during update
+```
+
+### ✅ Question 38: Normalize vs denormalize tradeoffs
+- Normalized: less redundancy, better integrity
+- Denormalized: faster reads, used in DW reporting
+
+### ✅ Question 39: Optimize batch deletes for archival
+```sql
+WHILE 1 = 1
+BEGIN
+    DELETE TOP (500) FROM Orders WHERE OrderDate < '2022-01-01';
+    IF @@ROWCOUNT = 0 BREAK;
+    WAITFOR DELAY '00:00:02';
+END
+```
+
+### ✅ Question 40: Use OPENJSON to shred input data
+```sql
+DECLARE @json NVARCHAR(MAX) = '[{"Id":1,"Name":"A"},{"Id":2,"Name":"B"}]';
+SELECT * FROM OPENJSON(@json)
+WITH (Id INT, Name NVARCHAR(100));
+```
+
+### ✅ Question 41: Explain latch vs lock
+- **Latch**: internal memory structure protection (tempdb contention)
+- **Lock**: concurrency control over rows, pages, tables
+
+### ✅ Question 42: Use SCHEMABINDING to protect views
+```sql
+CREATE VIEW vw_Protected
+WITH SCHEMABINDING
+AS
+SELECT ProductId, ProductName FROM dbo.Products;
+```
+
+### ✅ Question 43: Track long-running transactions
+```sql
+SELECT * FROM sys.dm_tran_active_transactions;
+```
+
+### ✅ Question 44: Difference between CROSS JOIN and CROSS APPLY
+- CROSS JOIN = Cartesian
+- CROSS APPLY = correlated subquery access
+
+### ✅ Question 45: Secure column encryption using Always Encrypted
+- Requires column master key and encryption
+```sql
+ALTER TABLE Customers
+ADD SSNEncrypted VARBINARY(256) COLLATE Latin1_General_BIN2 ENCRYPTED WITH (COLUMN_ENCRYPTION_KEY = CEK1, ENCRYPTION_TYPE = DETERMINISTIC, ALGORITHM = 'AEAD_AES_256_CBC_HMAC_SHA_256');
+```
+
+### ✅ Question 46: Implement surrogate key with sequence
+```sql
+CREATE SEQUENCE OrderSeq START WITH 1 INCREMENT BY 1;
+ALTER TABLE Orders ADD OrderNumber AS NEXT VALUE FOR OrderSeq;
+```
+
+### ✅ Question 47: Role-based access control in SQL
+```sql
+CREATE ROLE OrderViewer;
+GRANT SELECT ON Orders TO OrderViewer;
+EXEC sp_addrolemember 'OrderViewer', 'Alice';
+```
+
+### ✅ Question 48: Create columnstore index for DW table
+```sql
+CREATE CLUSTERED COLUMNSTORE INDEX idx_Orders_CS ON Orders;
+```
+
+### ✅ Question 49: Use FORMATMESSAGE for dynamic error
+```sql
+DECLARE @Error NVARCHAR(4000);
+SET @Error = FORMATMESSAGE('Customer ID %d not found', 101);
+PRINT @Error;
+```
+
+### ✅ Question 50: Create a secure, schema-bound inline UDF
+```sql
+CREATE FUNCTION dbo.fn_SafeSales (@ProductId INT)
+RETURNS TABLE
+WITH SCHEMABINDING
+AS
+RETURN (
+    SELECT SUM(oi.Quantity * oi.PriceAtPurchase) AS Sales
+    FROM dbo.OrderItems oi WHERE oi.ProductId = @ProductId
+);
+```
+
+---
 
 
