@@ -539,6 +539,111 @@ GROUP BY CustomerId;
 - **How**: Use `OVER()` with `PARTITION BY` and `ORDER BY` to define the scope and sequence of the calculation.
 
 ---
+## 🪟 SQL Window Functions: Plain English Guide with Analogies
+
+SQL Window Functions perform calculations across a set of table rows that are somehow related to the current row. Unlike GROUP BY, they do not reduce the number of rows. Instead, they "look across" rows and add extra columns with insights like rankings, previous values, and cumulative totals.
+
+---
+
+### 🔢 1. Cumulative Functions (Running Totals, Averages)
+
+**Analogy**: Tracking your daily spending, summing as you go.
+
+**SQL**: `SUM(Sales) OVER (ORDER BY Date)`
+
+| Day       | Expense | Running Total |
+|-----------|---------|----------------|
+| Monday    | $10     | $10            |
+| Tuesday   | $15     | $25            |
+| Wednesday | $5      | $30            |
+
+You can also use `AVG()`, `MAX()`, `MIN()` similarly.
+
+---
+
+### 📍 2. ROW_NUMBER() – Unique Row Numbers per Group
+
+**Analogy**: Assigning roll numbers to students in each class.
+
+**SQL**: `ROW_NUMBER() OVER (PARTITION BY ClassId ORDER BY Marks DESC)`
+
+Each group (Class) starts from 1.
+
+---
+
+### 🏆 3. RANK() and DENSE_RANK() – Ranking with Ties
+
+**Analogy**: Two students with same marks? Same rank.
+
+- `RANK()` skips the next number (1,2,2,4)
+- `DENSE_RANK()` doesn’t skip (1,2,2,3)
+
+**SQL**:
+```sql
+RANK() OVER (PARTITION BY ClassId ORDER BY Marks DESC)
+DENSE_RANK() OVER (PARTITION BY ClassId ORDER BY Marks DESC)
+```
+
+---
+
+### 🔁 4. LAG() and LEAD() – Accessing Previous/Next Rows
+
+**Analogy**: Looking at yesterday’s or tomorrow’s price.
+
+**SQL**:
+```sql
+LAG(Salary) OVER (ORDER BY JoinDate)
+LEAD(Salary) OVER (ORDER BY JoinDate)
+```
+
+---
+
+### 🪜 5. NTILE(n) – Dividing Rows into Buckets
+
+**Analogy**: Ranking players into 4 tiers based on performance.
+
+**SQL**:
+```sql
+NTILE(4) OVER (ORDER BY Score DESC)
+```
+
+Creates 4 equally-sized groups.
+
+---
+
+### 🧠 6. FIRST_VALUE() and LAST_VALUE()
+
+**Analogy**:
+- `FIRST_VALUE()`: Topper’s score shown in all rows.
+- `LAST_VALUE()`: Last person’s score shown in all rows.
+
+**SQL**:
+```sql
+FIRST_VALUE(Salary) OVER (PARTITION BY Dept ORDER BY Salary DESC)
+```
+
+**⚠️ LAST_VALUE** often requires window frame:
+```sql
+LAST_VALUE(Salary) OVER (PARTITION BY Dept ORDER BY Salary ASC ROWS BETWEEN UNBOUNDED PRECEDING AND UNBOUNDED FOLLOWING)
+```
+
+---
+
+### 🧾 Summary Table
+
+| Function         | Purpose                                     | Analogy                                    |
+|------------------|---------------------------------------------|--------------------------------------------|
+| `SUM()`          | Running total                               | Daily money spent so far                   |
+| `ROW_NUMBER()`   | Unique row number in group                  | Roll number in each class                  |
+| `RANK()`         | Rank with gaps for ties                     | Student ranks with skipped numbers         |
+| `DENSE_RANK()`   | Rank without gaps                           | Tied students get same rank (no skips)     |
+| `LAG()`          | Previous row value                          | What was yesterday’s price?                |
+| `LEAD()`         | Next row value                              | What’s tomorrow’s price?                   |
+| `NTILE(4)`       | Divide into 4 groups                        | Performance tiers                          |
+| `FIRST_VALUE()`  | First value in partition                    | Top scorer in your class                   |
+| `LAST_VALUE()`   | Last value in partition                     | Most recent entry in group                 |
+
+---
 
 ### 🔄 Stage 5: CTEs, Recursion & Pagination
 
