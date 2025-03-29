@@ -5851,20 +5851,23 @@ Each question includes:
 - What, Why, and How explanation
 - Fully commented SQL examples
 
--- ✅ Stage 12: SQL Server Internals – Transactions, Isolation, ACID, and Concurrency
--- First 5 Questions
+## ✅ Stage 12: SQL Server Internals – Transactions, Isolation, ACID, and Concurrency  
+---
 
--- 1. Begin a transaction and commit manually
+### 1. **Begin a transaction and commit manually**
+```sql
 BEGIN TRANSACTION;
     UPDATE Products SET Price = Price + 10 WHERE CategoryId = 1;
 COMMIT TRANSACTION;
--- What: Manual control.
--- Why: Ensure success before saving.
--- How: Use BEGIN and COMMIT.
+```
+- **What**: Manual control over transaction.
+- **Why**: Ensures that all changes are successful before saving to database.
+- **How**: Uses `BEGIN` and `COMMIT` to explicitly define transactional boundaries.
 
---------------------------------------------------
+---
 
--- 2. Rollback a transaction on error
+### 2. **Rollback a transaction on error**
+```sql
 BEGIN TRANSACTION;
 BEGIN TRY
     DELETE FROM Customers WHERE CustomerId = 101;
@@ -5874,38 +5877,49 @@ BEGIN CATCH
     ROLLBACK;
     PRINT 'Rollback due to error: ' + ERROR_MESSAGE();
 END CATCH;
--- What: Error-safe transaction.
--- Why: Avoid partial updates.
--- How: TRY...CATCH with rollback.
+```
+- **What**: Rollbacks changes in case of error.
+- **Why**: Prevents data inconsistency by rolling back incomplete transactions.
+- **How**: Uses `TRY...CATCH` for error detection and rollback.
 
---------------------------------------------------
+---
 
--- 3. Check if you're inside a transaction
+### 3. **Check if you're inside a transaction**
+```sql
 SELECT @@TRANCOUNT AS OpenTransactions;
--- What: See nesting level.
--- Why: Avoid transaction leaks.
--- How: Use @@TRANCOUNT to confirm.
+```
+- **What**: Displays the number of open transactions.
+- **Why**: Useful for debugging and verifying nested transaction states.
+- **How**: `@@TRANCOUNT` system variable indicates active transaction depth.
 
---------------------------------------------------
+---
 
--- 4. Set isolation level to READ UNCOMMITTED
+### 4. **Set isolation level to READ UNCOMMITTED**
+```sql
 SET TRANSACTION ISOLATION LEVEL READ UNCOMMITTED;
 SELECT * FROM Orders;
--- What: Dirty reads allowed.
--- Why: Non-blocking reads.
--- How: Risk of uncommitted data.
+```
+- **What**: Reads uncommitted (dirty) data.
+- **Why**: Minimizes blocking for fast reporting but risks inconsistent results.
+- **How**: Executes with `READ UNCOMMITTED` isolation level.
 
---------------------------------------------------
+---
 
-### 5. Use REPEATABLE READ to lock rows
+### 5. **Use REPEATABLE READ to lock rows**
+```sql
 SET TRANSACTION ISOLATION LEVEL REPEATABLE READ;
 BEGIN TRAN;
 SELECT * FROM Products WHERE CategoryId = 1;
--- No other transaction can update/delete these rows until commit
+-- Other sessions cannot update/delete these rows until COMMIT
 COMMIT;
-**What**: Lock read rows.
-**Why**: Prevent phantom updates.
-**How**: REPEATABLE READ.
+```
+- **What**: Locks rows read in a transaction.
+- **Why**: Prevents phantom updates or non-repeatable reads.
+- **How**: Isolation level ensures rows are stable until transaction ends.
+
+---
+
+
 
 
 ### 6. Use SERIALIZABLE to block insert of phantom rows
