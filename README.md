@@ -1971,6 +1971,78 @@ ORDER BY total_worker_time DESC;
 - ✅ Use SQL Server Agent to automate ETL from DMVs
 
 ---
+-- ✅ 1. Create Monitoring Schema and Snapshot Table
+CREATE SCHEMA Monitoring;
+GO
+
+CREATE TABLE Monitoring.QueryStatsSnapshot (
+    SnapshotId INT IDENTITY(1,1) PRIMARY KEY,
+    CollectedAt DATETIME2 DEFAULT SYSDATETIME(),
+    QueryHash BINARY(8),
+    ExecutionCount BIGINT,
+    TotalWorkerTime BIGINT,
+    TotalElapsedTime BIGINT,
+    TotalLogicalReads BIGINT
+);
+GO
+
+-- ✅ 2. Create SQL Server Agent Job Manually (GUI Instructions Below)
+-- OR use the script below to create job + step + schedule
+
+USE msdb;
+GO
+
+-- ✅ Create the job
+EXEC sp_add_job
+    @job_name = N'CaptureQueryStatsSnapshot',
+    @enabled = 1,
+    @description = N'Captures query performance metrics from sys.dm_exec_query_stats every 10 minutes';
+GO
+
+-- ✅ Add a job step
+EXEC sp_add_jobstep
+    @job_name = N'CaptureQueryStatsSnapshot',
+    @step_name = N'Insert Snapshot from DMV',
+    @subsystem = N'TSQL',
+    @command = N'
+        INSERT INTO Monitoring.QueryStatsSnapshot (QueryHash, ExecutionCount, TotalWorkerTime, TotalElapsedTime, TotalLogicalReads)
+        SELECT
+            qs.query_hash,
+            qs.execution_count,
+            qs.total_worker_time,
+            qs.total_elapsed_time,
+            qs.total_logical_reads
+        FROM sys.dm_exec_query_stats qs
+        WHERE qs.creation_time >= DATEADD(MINUTE, -10, GETDATE());
+    ',
+    @database_name = N'master',
+    @on_success_action = 1,
+    @on_fail_action = 2;
+GO
+
+-- ✅ Add a schedule to run every 10 minutes
+EXEC sp_add_schedule
+    @schedule_name = N'Every10Min',
+    @freq_type = 4,              -- Daily
+    @freq_interval = 1,         -- Every day
+    @freq_subday_type = 4,      -- Minutes
+    @freq_subday_interval = 10, -- Every 10 minutes
+    @active_start_time = 0000;  -- Midnight
+GO
+
+-- ✅ Attach schedule to job
+EXEC sp_attach_schedule
+    @job_name = N'CaptureQueryStatsSnapshot',
+    @schedule_name = N'Every10Min';
+GO
+
+-- ✅ Enable the job
+EXEC sp_add_jobserver
+    @job_name = N'CaptureQueryStatsSnapshot';
+GO
+
+
+---
 
 ### 📆 Stage 14: Advanced SQL Patterns & Final Project Integration
 
