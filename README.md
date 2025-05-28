@@ -1731,6 +1731,89 @@ FROM CHANGETABLE(CHANGES Orders, 101) AS CT; -- 101 = last sync version
 - Always store `User`, `Action`, and `Timestamp` in audit logs
 - Encrypt or mask PII in audit records when needed
 
+-- ✅ SETUP: Audit Schema and User Context
+CREATE SCHEMA Audit;
+
+-- Optional: Store user info via SESSION_CONTEXT from app
+EXEC sp_set_session_context 'CurrentUser', 'john.doe@company.com';
+
+-- ✅ MAIN TABLE (Example)
+CREATE TABLE dbo.Orders (
+    OrderId INT PRIMARY KEY,
+    CustomerId INT,
+    Status NVARCHAR(50),
+    Amount DECIMAL(10, 2),
+    ModifiedAt DATETIME2 DEFAULT SYSDATETIME(),
+    IsDeleted BIT DEFAULT 0
+);
+
+-- ✅ AUDIT TABLE
+CREATE TABLE Audit.OrdersLog (
+    AuditId INT IDENTITY(1,1) PRIMARY KEY,
+    OrderId INT,
+    ActionType VARCHAR(10),       -- INSERT, UPDATE, DELETE
+    PerformedBy NVARCHAR(100),   -- From SYSTEM_USER or SESSION_CONTEXT
+    ActionDate DATETIME2 DEFAULT SYSDATETIME(),
+    OldStatus NVARCHAR(50),
+    NewStatus NVARCHAR(50),
+    OldAmount DECIMAL(10,2),
+    NewAmount DECIMAL(10,2)
+);
+
+-- ✅ AUDIT TRIGGER FOR UPDATE
+CREATE TRIGGER trg_Audit_Orders_Update
+ON dbo.Orders
+AFTER UPDATE
+AS
+BEGIN
+    SET NOCOUNT ON;
+
+    INSERT INTO Audit.OrdersLog (OrderId, ActionType, PerformedBy, ActionDate, OldStatus, NewStatus, OldAmount, NewAmount)
+    SELECT
+        d.OrderId,
+        'UPDATE',
+        CAST(SESSION_CONTEXT(N'CurrentUser') AS NVARCHAR(100)),
+        SYSDATETIME(),
+        d.Status,
+        i.Status,
+        d.Amount,
+        i.Amount
+    FROM deleted d
+    JOIN inserted i ON d.OrderId = i.OrderId
+    WHERE d.Status <> i.Status OR d.Amount <> i.Amount;
+END;
+
+-- ✅ OPTIONAL: SOFT DELETE SUPPORT + VIEW
+CREATE VIEW dbo.Orders_Active AS
+SELECT * FROM dbo.Orders WHERE IsDeleted = 0;
+
+-- ✅ ENABLE TEMPORAL TABLE FOR FULL HISTORY (Alternative to triggers)
+CREATE TABLE dbo.Orders_History (
+    OrderId INT PRIMARY KEY,
+    CustomerId INT,
+    Status NVARCHAR(50),
+    Amount DECIMAL(10, 2),
+    ValidFrom DATETIME2 GENERATED ALWAYS AS ROW START,
+    ValidTo DATETIME2 GENERATED ALWAYS AS ROW END,
+    PERIOD FOR SYSTEM_TIME (ValidFrom, ValidTo)
+)
+WITH (SYSTEM_VERSIONING = ON);
+
+-- ✅ CHANGE TRACKING FOR SYNC-ONLY SCENARIOS
+ALTER DATABASE CURRENT SET CHANGE_TRACKING = ON
+(CHANGE_RETENTION = 7 DAYS, AUTO_CLEANUP = ON);
+
+ALTER TABLE dbo.Orders
+ENABLE CHANGE_TRACKING
+WITH (TRACK_COLUMNS_UPDATED = ON);
+
+-- ✅ QUERY CHANGE TRACKING FOR SYNC
+SELECT *
+FROM CHANGETABLE(CHANGES dbo.Orders, 101) AS CT; -- 101 = last sync version
+
+-- ✅ RETRIEVE CURRENT SYNC VERSION
+SELECT CHANGE_TRACKING_CURRENT_VERSION() AS CurrentVersion;
+
 ---
 
 ### ⚖️ Summary
